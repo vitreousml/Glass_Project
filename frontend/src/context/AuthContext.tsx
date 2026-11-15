@@ -10,6 +10,7 @@ import {
   User as FirebaseUser,
 } from "firebase/auth";
 import { auth, googleProvider } from "@/lib/firebase";
+import { recordLogin } from "@/lib/api";
 
 export interface User {
   uid: string;
@@ -94,10 +95,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const idToken = await result.user.getIdToken();
       setToken(idToken);
       localStorage.setItem("glass_platform_token", idToken);
+      // Save this person's name and email. Never block sign-in if it fails.
+      recordLogin(idToken).catch((e) => console.warn("Could not record login:", e.message));
     } catch (err: any) {
-      console.warn("Google Sign-In popup notice:", err.message);
-      // Fallback to dev mode login if credentials not active on localhost
-      loginDevMock("google.researcher@glasslab.edu", "Dr. Eleanor Vance");
+      if (err.code === "auth/popup-closed-by-user" || err.code === "auth/cancelled-popup-request") return;
+      console.error("Google sign-in failed:", err.code, err.message);
+      alert("Google sign-in failed: " + (err.code || err.message));
     }
   };
 
@@ -107,10 +110,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const idToken = await result.user.getIdToken();
       setToken(idToken);
       localStorage.setItem("glass_platform_token", idToken);
+      recordLogin(idToken).catch((e) => console.warn("Could not record login:", e.message));
     } catch (err: any) {
-      console.warn("Firebase Email Login notice:", err.message);
-      // Try registration or fallback
-      loginDevMock(email);
+      console.error("Email sign-in failed:", err.code, err.message);
+      alert("Sign-in failed: " + (err.code || err.message));
     }
   };
 
@@ -120,9 +123,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const idToken = await result.user.getIdToken();
       setToken(idToken);
       localStorage.setItem("glass_platform_token", idToken);
+      recordLogin(idToken).catch((e) => console.warn("Could not record login:", e.message));
     } catch (err: any) {
-      console.warn("Firebase Register notice:", err.message);
-      loginDevMock(email);
+      console.error("Email sign-up failed:", err.code, err.message);
+      alert("Sign-up failed: " + (err.code || err.message));
     }
   };
 

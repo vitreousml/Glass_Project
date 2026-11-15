@@ -118,22 +118,47 @@ def get_user_profile(user: Dict[str, Any] = Depends(get_current_user)):
     Does NOT store prediction history (respecting privacy constraints).
     """
     uid = user.get("uid")
+    email = user.get("email") or ""
+    name = user.get("name") or email.split("@")[0]
+    now = datetime.utcnow().isoformat()
+
+    # The offline demo login is fake: never write it to the database.
+    if user.get("mock"):
+        return {
+            "uid": uid, "email": email, "displayName": name,
+            "plan": "Demo (not saved)", "role": "Glass Research Scientist",
+            "recorded": False,
+        }
+
     db = get_firestore_db()
     user_ref = db.collection("users").document(uid)
     doc = user_ref.get()
 
+    # First sign-in: create the record with name and email.
     if not doc.exists:
         profile_data = {
             "uid": uid,
-            "email": user.get("email"),
-            "displayName": user.get("name") or user.get("email", "").split("@")[0],
+            "email": email,
+            "displayName": name,
             "plan": "Free Tier (Scale to Zero)",
             "role": "Glass Research Scientist",
-            "createdAt": datetime.utcnow().isoformat()
+            "createdAt": now,
+            "lastLoginAt": now,
+            "loginCount": 1,
         }
         user_ref.set(profile_data)
         return profile_data
-    return doc.to_dict()
+
+    # Returning user: note the new login and keep name/email up to date.
+    existing = doc.to_dict() or {}
+    updates = {"lastLoginAt": now, "loginCount": (existing.get("loginCount") or 0) + 1}
+    if email and email != existing.get("email"):
+        updates["email"] = email
+    if user.get("name") and user["name"] != existing.get("displayName"):
+        updates["displayName"] = user["name"]
+    user_ref.update(updates)
+    existing.update(updates)
+    return existing
 
 @app.post("/api/v1/predict")
 def predict_glass(
