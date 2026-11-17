@@ -1,72 +1,90 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect } from "react";
-import {
-  signInWithPopup,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  signOut,
-  onAuthStateChanged,
-  User as FirebaseUser,
-} from "firebase/auth";
+import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { signInWithPopup, signOut, onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
 import { auth, googleProvider } from "@/lib/firebase";
-import { recordLogin } from "@/lib/api";
+import { getProfile, recordLogin, saveProfile as saveProfileApi, type ProfileDetails, type UserProfile } from "@/lib/api";
 
 export interface User {
   uid: string;
   email: string;
   displayName: string;
   plan: string;
+  /** The offline demo login: nothing is sent to or stored on the server. */
+  demo?: boolean;
 }
+
+type ProfileStatus = "idle" | "loading" | "ready" | "error";
 
 interface AuthContextType {
   user: User | null;
   token: string | null;
-  loginWithGoogle: () => Promise<void>;
-  loginWithEmail: (email: string, pass: string) => Promise<void>;
-  registerWithEmail: (email: string, pass: string) => Promise<void>;
-  loginDevMock: (email: string, name?: string) => void;
-  logout: () => Promise<void>;
   isLoading: boolean;
+  loginWithGoogle: () => Promise<void>;
+  loginDemo: () => void;
+  logout: () => Promise<void>;
   authError: string | null;
   clearAuthError: () => void;
+
+  /** The signed-in user's answers to the first-sign-in questions. */
+  profile: UserProfile | null;
+  profileStatus: ProfileStatus;
+  saveProfile: (details: ProfileDetails) => Promise<void>;
+  retryProfile: () => void;
+
+  /** True right after a sign-in action (not on a page reload), so the welcome can play once. */
+  justSignedIn: boolean;
+  ackWelcome: () => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
   token: null,
-  loginWithGoogle: async () => {},
-  loginWithEmail: async () => {},
-  registerWithEmail: async () => {},
-  loginDevMock: () => {},
-  logout: async () => {},
   isLoading: true,
+  loginWithGoogle: async () => {},
+  loginDemo: () => {},
+  logout: async () => {},
   authError: null,
   clearAuthError: () => {},
+  profile: null,
+  profileStatus: "idle",
+  saveProfile: async () => {},
+  retryProfile: () => {},
+  justSignedIn: false,
+  ackWelcome: () => {},
 });
+
+const USER_KEY = "glass_platform_user";
+const TOKEN_KEY = "glass_platform_token";
+// Demo answers stay in this browser only.
+const DEMO_PROFILE_KEY = "glass_platform_demo_profile";
+
+const isDemoToken = (t: string | null) => !!t && t.startsWith("mock_dev_token_");
 
 // Plain-language messages for the Firebase errors people actually hit.
 function friendlyAuthError(code: string | undefined, fallback: string): string {
   switch (code) {
-    case "auth/invalid-credential":
-    case "auth/wrong-password":
-    case "auth/user-not-found":
-      return "That email and password don't match an account.";
-    case "auth/invalid-email":
-      return "That doesn't look like an email address.";
-    case "auth/too-many-requests":
-      return "Too many attempts. Wait a minute and try again.";
     case "auth/network-request-failed":
-      return "Couldn't reach the sign-in service. Check your connection.";
+      return "Couldn't reach Google. Check your connection and try again.";
     case "auth/popup-blocked":
       return "The browser blocked the Google window. Allow pop-ups for this site and try again.";
-    case "auth/email-already-in-use":
-      return "An account with that email already exists.";
-    case "auth/weak-password":
-      return "Choose a password of at least 6 characters.";
+    case "auth/too-many-requests":
+      return "Too many attempts. Wait a minute and try again.";
+    case "auth/unauthorized-domain":
+      return "Google sign-in isn't enabled for this address yet.";
     default:
       return code ? `${fallback} (${code}).` : `${fallback}.`;
   }
+}
+
+function demoProfile(user: User): UserProfile {
+  try {
+    const saved = localStorage.getItem(DEMO_PROFILE_KEY);
+    if (saved) return JSON.parse(saved);
+  } catch {
+    // ignore unreadable storage
+  }
+  return { uid: user.uid, email: user.email, profileComplete: false, recorded: false };
 }
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
@@ -74,16 +92,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [profileStatus, setProfileStatus] = useState<ProfileStatus>("idle");
+  const [profileAttempt, setProfileAttempt] = useState(0);
+  const [justSignedIn, setJustSignedIn] = useState(false);
 
   useEffect(() => {
-    // 1. Listen to real Firebase Auth state changes
     const unsubscribe = onAuthStateChanged(auth, async (fbUser: FirebaseUser | null) => {
       if (fbUser) {
         try {
           const idToken = await fbUser.getIdToken();
           setToken(idToken);
-          localStorage.setItem("glass_platform_token", idToken);
-
+          localStorage.setItem(TOKEN_KEY, idToken);
           const appUser: User = {
             uid: fbUser.uid,
             email: fbUser.email || "",
@@ -91,21 +111,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             plan: "Academic Free Tier",
           };
           setUser(appUser);
-          localStorage.setItem("glass_platform_user", JSON.stringify(appUser));
+          localStorage.setItem(USER_KEY, JSON.stringify(appUser));
         } catch (err) {
           console.error("Error retrieving Firebase token:", err);
         }
       } else {
-        // Fallback: check localStorage for saved session
-        const savedToken = localStorage.getItem("glass_platform_token");
-        const savedUser = localStorage.getItem("glass_platform_user");
+        // No Google session: restore a saved demo session, if any.
+        const savedToken = localStorage.getItem(TOKEN_KEY);
+        const savedUser = localStorage.getItem(USER_KEY);
         if (savedToken && savedUser) {
           try {
+            const parsed: User = JSON.parse(savedUser);
             setToken(savedToken);
-            setUser(JSON.parse(savedUser));
+            setUser({ ...parsed, demo: parsed.demo || isDemoToken(savedToken) });
           } catch {
-            localStorage.removeItem("glass_platform_token");
-            localStorage.removeItem("glass_platform_user");
+            localStorage.removeItem(TOKEN_KEY);
+            localStorage.removeItem(USER_KEY);
           }
         } else {
           setUser(null);
@@ -114,9 +135,46 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
       setIsLoading(false);
     });
-
     return () => unsubscribe();
   }, []);
+
+  // Load the profile whenever someone is signed in, to know whether to ask the questions.
+  const uid = user?.uid;
+  const demo = !!user?.demo;
+  useEffect(() => {
+    if (!uid || !user) return;
+    let cancelled = false;
+    if (demo) {
+      Promise.resolve(demoProfile(user)).then((p) => {
+        if (cancelled) return;
+        setProfile(p);
+        setProfileStatus("ready");
+      });
+      return () => {
+        cancelled = true;
+      };
+    }
+    Promise.resolve()
+      .then(() => {
+        if (!cancelled) setProfileStatus("loading");
+        return getProfile(token);
+      })
+      .then((p) => {
+        if (cancelled) return;
+        setProfile(p);
+        setProfileStatus("ready");
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.warn("Could not load profile:", err);
+        setProfileStatus("error");
+      });
+    return () => {
+      cancelled = true;
+    };
+    // Re-run per account and on retry, not on every token refresh.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uid, demo, profileAttempt]);
 
   const loginWithGoogle = async () => {
     setAuthError(null);
@@ -124,7 +182,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const result = await signInWithPopup(auth, googleProvider);
       const idToken = await result.user.getIdToken();
       setToken(idToken);
-      localStorage.setItem("glass_platform_token", idToken);
+      localStorage.setItem(TOKEN_KEY, idToken);
+      setJustSignedIn(true);
       // Save this person's name and email. Never block sign-in if it fails.
       recordLogin(idToken).catch((e) => console.warn("Could not record login:", e.message));
     } catch (caught) {
@@ -135,48 +194,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  const loginWithEmail = async (email: string, pass: string) => {
+  const loginDemo = () => {
     setAuthError(null);
-    try {
-      const result = await signInWithEmailAndPassword(auth, email, pass);
-      const idToken = await result.user.getIdToken();
-      setToken(idToken);
-      localStorage.setItem("glass_platform_token", idToken);
-      recordLogin(idToken).catch((e) => console.warn("Could not record login:", e.message));
-    } catch (caught) {
-      const err = caught as { code?: string; message?: string };
-      console.error("Email sign-in failed:", err.code, err.message);
-      setAuthError(friendlyAuthError(err.code, "Sign-in failed"));
-    }
-  };
-
-  const registerWithEmail = async (email: string, pass: string) => {
-    setAuthError(null);
-    try {
-      const result = await createUserWithEmailAndPassword(auth, email, pass);
-      const idToken = await result.user.getIdToken();
-      setToken(idToken);
-      localStorage.setItem("glass_platform_token", idToken);
-      recordLogin(idToken).catch((e) => console.warn("Could not record login:", e.message));
-    } catch (caught) {
-      const err = caught as { code?: string; message?: string };
-      console.error("Email sign-up failed:", err.code, err.message);
-      setAuthError(friendlyAuthError(err.code, "Sign-up failed"));
-    }
-  };
-
-  const loginDevMock = (email: string, name?: string) => {
-    const mockUser: User = {
+    const demoUser: User = {
       uid: "usr_" + Math.random().toString(36).substring(2, 9),
-      email: email,
-      displayName: name || email.split("@")[0],
-      plan: "Academic Free Tier",
+      email: "demo.scientist@glasslab.edu",
+      displayName: "Demo researcher",
+      plan: "Demo (not saved)",
+      demo: true,
     };
-    const mockToken = "mock_dev_token_" + Date.now();
-    setUser(mockUser);
-    setToken(mockToken);
-    localStorage.setItem("glass_platform_user", JSON.stringify(mockUser));
-    localStorage.setItem("glass_platform_token", mockToken);
+    const demoToken = "mock_dev_token_" + Date.now();
+    setJustSignedIn(true);
+    setUser(demoUser);
+    setToken(demoToken);
+    localStorage.setItem(USER_KEY, JSON.stringify(demoUser));
+    localStorage.setItem(TOKEN_KEY, demoToken);
   };
 
   const logout = async () => {
@@ -187,23 +219,61 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
     setUser(null);
     setToken(null);
-    localStorage.removeItem("glass_platform_token");
-    localStorage.removeItem("glass_platform_user");
+    setProfile(null);
+    setProfileStatus("idle");
+    setJustSignedIn(false);
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(USER_KEY);
+    localStorage.removeItem(DEMO_PROFILE_KEY);
   };
+
+  const saveProfile = useCallback(
+    async (details: ProfileDetails) => {
+      if (!user) return;
+      if (user.demo) {
+        // Demo: keep the answers in this browser only, never on the server.
+        const local: UserProfile = {
+          uid: user.uid,
+          email: user.email,
+          university: details.university.trim(),
+          position: details.position,
+          positionOther: details.position === "other" ? details.position_other?.trim() : undefined,
+          course: details.position === "student" ? details.course?.trim() : undefined,
+          profileComplete: true,
+          recorded: false,
+        };
+        try {
+          localStorage.setItem(DEMO_PROFILE_KEY, JSON.stringify(local));
+        } catch {
+          // storage blocked: fine for a demo
+        }
+        setProfile(local);
+        return;
+      }
+      // Throws with the server's message; the form shows it.
+      const saved = await saveProfileApi(details, token);
+      setProfile(saved);
+    },
+    [user, token],
+  );
 
   return (
     <AuthContext.Provider
       value={{
         user,
         token,
-        loginWithGoogle,
-        loginWithEmail,
-        registerWithEmail,
-        loginDevMock,
-        logout,
         isLoading,
+        loginWithGoogle,
+        loginDemo,
+        logout,
         authError,
         clearAuthError: () => setAuthError(null),
+        profile,
+        profileStatus,
+        saveProfile,
+        retryProfile: () => setProfileAttempt((n) => n + 1),
+        justSignedIn,
+        ackWelcome: () => setJustSignedIn(false),
       }}
     >
       {children}

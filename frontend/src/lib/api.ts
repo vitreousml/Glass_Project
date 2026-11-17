@@ -23,6 +23,33 @@ export const getBankSummary = () => call("/api/v1/bank/summary");
 // Tells the backend "this person just signed in": it saves their name and email.
 export const recordLogin = (token: string | null) => call("/api/v1/auth/me", {}, token);
 
+export type Position = "student" | "faculty" | "industry" | "other";
+
+// Asked once, right after a new account's first sign-in.
+export interface ProfileDetails {
+  university: string;
+  position: Position;
+  position_other?: string; // when position is "other"
+  course?: string; // when position is "student"
+}
+
+export interface UserProfile {
+  uid: string;
+  email?: string;
+  displayName?: string;
+  university?: string;
+  position?: Position;
+  positionOther?: string;
+  course?: string;
+  profileComplete: boolean;
+  recorded: boolean;
+}
+
+export const getProfile = (token: string | null): Promise<UserProfile> => call("/api/v1/auth/profile", {}, token);
+
+export const saveProfile = (details: ProfileDetails, token: string | null): Promise<UserProfile> =>
+  call("/api/v1/auth/profile", { method: "PUT", body: JSON.stringify(details) }, token);
+
 // "mol" = mol %, "wt" = weight %. The backend converts weight % to mol % itself.
 export type CompositionBasis = "mol" | "wt";
 

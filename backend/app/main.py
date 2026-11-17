@@ -59,6 +59,25 @@ class UserProfileUpdate(BaseModel):
     displayName: Optional[str] = None
     role: Optional[str] = "Glass Research Scientist"
 
+class ProfileDetails(BaseModel):
+    """What a new account is asked once, right after first sign-in."""
+    university: str = Field(..., max_length=120, example="Thapar Institute of Engineering and Technology",
+                            description="University, or organisation for industry and others")
+    position: Literal["student", "faculty", "industry", "other"] = Field(..., example="student")
+    position_other: Optional[str] = Field(None, max_length=80, example="Independent researcher",
+                                          description="Required when position is 'other'")
+    course: Optional[str] = Field(None, max_length=120, example="M.Tech Materials Science",
+                                  description="Required when position is 'student'")
+
+# Profile fields returned to the signed-in user (never other people's records).
+PROFILE_FIELDS = ["uid", "email", "displayName", "university", "position", "positionOther", "course"]
+
+def _profile_view(record: Dict[str, Any], recorded: bool = True) -> Dict[str, Any]:
+    view = {k: record[k] for k in PROFILE_FIELDS if record.get(k) is not None}
+    view["profileComplete"] = bool(record.get("profileCompletedAt"))
+    view["recorded"] = recorded
+    return view
+
 @app.on_event("startup")
 def startup_event():
     # 1. Initialize Firebase Admin SDK & connect Firestore
@@ -169,6 +188,51 @@ def get_user_profile(user: Dict[str, Any] = Depends(get_current_user)):
     user_ref.update(updates)
     existing.update(updates)
     return existing
+
+@app.get("/api/v1/auth/profile")
+def read_profile(user: Dict[str, Any] = Depends(get_current_user)):
+    """
+    The signed-in user's own profile, and whether they have answered the
+    first-sign-in questions (profileComplete). Read-only: does not count a login.
+    """
+    uid = user.get("uid")
+    if user.get("mock"):
+        return _profile_view({"uid": uid, "email": user.get("email")}, recorded=False)
+    doc = get_firestore_db().collection("users").document(uid).get()
+    record = doc.to_dict() if doc.exists else {"uid": uid, "email": user.get("email")}
+    return _profile_view(record or {})
+
+@app.put("/api/v1/auth/profile")
+def save_profile(data: ProfileDetails, user: Dict[str, Any] = Depends(get_current_user)):
+    """Save the first-sign-in answers (university, position, and course for students)."""
+    university = data.university.strip()
+    position_other = (data.position_other or "").strip()
+    course = (data.course or "").strip()
+
+    if len(university) < 2:
+        raise HTTPException(status_code=400, detail="Enter your university or organisation.")
+    if data.position == "student" and not course:
+        raise HTTPException(status_code=400, detail="Enter the course you are studying.")
+    if data.position == "other" and not position_other:
+        raise HTTPException(status_code=400, detail="Describe your position.")
+
+    record = {
+        "uid": user.get("uid"),
+        "email": user.get("email") or "",
+        "university": university,
+        "position": data.position,
+        # Only keep the follow-up answer that applies to the chosen position.
+        "positionOther": position_other if data.position == "other" else None,
+        "course": course if data.position == "student" else None,
+        "profileCompletedAt": datetime.utcnow().isoformat(),
+    }
+
+    # The offline demo login is fake: never write it to the database.
+    if user.get("mock"):
+        return _profile_view(record, recorded=False)
+
+    get_firestore_db().collection("users").document(user["uid"]).set(record, merge=True)
+    return _profile_view(record)
 
 @app.post("/api/v1/predict")
 def predict_glass(
