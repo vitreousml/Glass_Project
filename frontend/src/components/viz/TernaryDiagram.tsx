@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useId, useMemo } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { OXIDES, formula, type Composition } from "@/lib/chem";
 import { DURATION, EASE_OUT, SPRING } from "@/lib/motion";
@@ -56,6 +56,7 @@ export function TernaryDiagram({
   points,
   highlightId,
   onHover,
+  scanning = false,
   className = "",
   title = "Composition on the SiO₂–B₂O₃–Na₂O triangle",
 }: {
@@ -68,10 +69,13 @@ export function TernaryDiagram({
   points?: TernaryPoint[];
   highlightId?: string | null;
   onHover?: (id: string | null) => void;
+  /** Sweep a line across the SiO₂ levels being screened (a search is running). */
+  scanning?: boolean;
   className?: string;
   title?: string;
 }) {
   const reduce = useReducedMotion();
+  const clipId = "tri" + useId().replace(/[^a-zA-Z0-9_-]/g, "");
 
   const regionPath = useMemo(() => {
     if (!region || region.length < 3) return null;
@@ -98,6 +102,25 @@ export function TernaryDiagram({
           <line key={i} {...l} />
         ))}
       </g>
+
+      {/* Search sweep: the server screens SiO₂ from 40 to 85 mol %, low to high */}
+      {scanning && !reduce && (
+        <>
+          <clipPath id={clipId}>
+            <path d={`M${V.SiO2.x},${V.SiO2.y} L${V.B2O3.x},${V.B2O3.y} L${V.Na2O.x},${V.Na2O.y} Z`} />
+          </clipPath>
+          <g clipPath={`url(#${clipId})`}>
+            <motion.g
+              initial={{ y: toXY({ SiO2: 40, B2O3: 60 }).y }}
+              animate={{ y: toXY({ SiO2: 85, B2O3: 15 }).y }}
+              transition={{ duration: 1.1, ease: "linear", repeat: Infinity, repeatDelay: 0.15 }}
+            >
+              <rect x={0} y={0} width={120} height={6} style={{ fill: "var(--heat-3)" }} opacity={0.18} />
+              <line x1={0} x2={120} y1={0} y2={0} stroke="var(--heat-2)" strokeWidth={0.8} />
+            </motion.g>
+          </g>
+        </>
+      )}
 
       {/* Shaded region: outline draws, then fills */}
       {regionPath && (

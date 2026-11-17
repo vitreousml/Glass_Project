@@ -8,7 +8,20 @@ export type Oxide = (typeof OXIDES)[number];
 
 // g/mol. Used on screen to keep the same glass when switching mol % <-> wt %.
 // The backend does the conversion the prediction actually uses.
-export const MOLAR_MASS: Record<string, number> = { SiO2: 60.084, B2O3: 69.62, Na2O: 61.979 };
+export const MOLAR_MASS: Record<string, number> = {
+  SiO2: 60.084,
+  B2O3: 69.62,
+  Na2O: 61.979,
+  // Glass formers the models don't cover yet
+  Al2O3: 101.961,
+  P2O5: 141.944,
+  GeO2: 104.63,
+  As2O3: 197.841,
+  V2O5: 181.88,
+};
+
+/** Oxides the trained models accept. */
+export const isModelled = (ox: string) => (OXIDES as readonly string[]).includes(ox);
 
 const SUBSCRIPTS = "₀₁₂₃₄₅₆₇₈₉";
 /** "B2O3" -> "B₂O₃" */
@@ -110,3 +123,22 @@ export const PROPERTIES = [
   { id: "youngs_modulus", label: "Young's modulus", available: false },
   { id: "cte", label: "Thermal expansion", available: false },
 ] as const;
+
+// How many elements can be selected at once.
+export const MAX_ELEMENTS = 5;
+
+// Network formers: a glass needs at least one of these.
+export const GLASS_FORMERS = ["B", "Si", "Al", "P", "Ge", "As", "V"] as const;
+
+/**
+ * Keep only warnings about oxides the user chose, written with subscripts.
+ * (The server also checks oxides that weren't selected, which are 0 by definition.)
+ */
+export function relevantWarnings(warnings: string[], oxides: string[]): string[] {
+  const all = Object.keys(MOLAR_MASS);
+  const out = warnings.filter((w) => {
+    const about = all.find((ox) => w.startsWith(`${ox} =`) || w.startsWith(`${ox} `));
+    return !about || oxides.includes(about);
+  });
+  return Array.from(new Set(out)).map((w) => w.replace(/\b(SiO2|B2O3|Na2O)\b/g, (m) => formula(m)));
+}

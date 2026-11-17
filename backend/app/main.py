@@ -55,10 +55,6 @@ class ZenDiscoverInput(BaseModel):
     tolerance: float = Field(default=25.0, example=20.0, description="Tolerance band (+/- K)")
     model_name: str = Field(default="RF", example="RF", description="Model to use for screening")
 
-class UserProfileUpdate(BaseModel):
-    displayName: Optional[str] = None
-    role: Optional[str] = "Glass Research Scientist"
-
 class ProfileDetails(BaseModel):
     """What a new account is asked once, right after first sign-in."""
     university: str = Field(..., max_length=120, example="Thapar Institute of Engineering and Technology",

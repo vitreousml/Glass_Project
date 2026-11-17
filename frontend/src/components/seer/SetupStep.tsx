@@ -8,7 +8,7 @@ import { SPRING, T } from "@/lib/motion";
 import { fixed } from "@/lib/units";
 import { Formula, Tg } from "@/components/ui/Tg";
 
-function Box({ on }: { on: boolean }) {
+export function Box({ on }: { on: boolean }) {
   return (
     <span
       className={`inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] border transition-colors duration-200 ${
@@ -67,7 +67,7 @@ export function SetupStep({
   onModel: (id: string) => void;
 }) {
   const modelOptions = [
-    ...MODELS.map((m) => ({ id: m.id, name: m.name, detail: `±${fixed(m.mae)} °C · R² ${m.r2}` })),
+    ...MODELS.map((m) => ({ id: m.id, name: m.name, detail: `±${fixed(m.mae, 0)} °C · R² ${m.r2}` })),
     { id: "ALL", name: "Compare all four", detail: "RF, XGB, KNN and SVM side by side" },
   ];
 
@@ -130,15 +130,22 @@ export function SetupStep({
             </motion.button>
           );
         })}
-        <p className="mt-3 mb-1.5 text-xs text-ink-3">No trained model yet</p>
-        <ul className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+        <div className="mt-2 space-y-2">
           {PROPERTIES.filter((p) => !p.available).map((p) => (
-            <li key={p.id} className="flex items-center gap-2 text-sm text-ink-3">
-              <span className="h-px w-3 bg-line-strong" aria-hidden />
-              {p.label}
-            </li>
+            <div
+              key={p.id}
+              role="checkbox"
+              aria-checked={false}
+              aria-disabled
+              title="No trained model for this property yet"
+              className="flex h-10 w-full cursor-not-allowed items-center gap-3 rounded-md border border-dashed border-line px-3 text-left text-ink-3"
+            >
+              <span className="inline-flex h-4 w-4 shrink-0 rounded-[4px] border border-line" aria-hidden />
+              <span className="flex-1 text-sm">{p.label}</span>
+              <span className="rounded-sm bg-surface-2 px-1.5 py-0.5 text-xs">No model yet</span>
+            </div>
           ))}
-        </ul>
+        </div>
       </Section>
 
       <Section title="Model" hint="± is the average error on test glasses the model never saw.">

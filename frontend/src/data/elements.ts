@@ -5,7 +5,10 @@ export interface ElementData {
   category: string;
   row: number;
   col: number;
+  /** Can be selected. */
   supported?: boolean;
+  /** Selectable glass former the models don't cover yet. */
+  noModel?: boolean;
   implicit?: boolean;
   oxide?: string;
 }
@@ -28,9 +31,9 @@ export const PERIODIC_ELEMENTS: ElementData[] = [
   // Period 3
   { number: 11, symbol: "Na", name: "Sodium", category: "alkali", row: 3, col: 1, supported: true, oxide: "Na2O" },
   { number: 12, symbol: "Mg", name: "Magnesium", category: "alkaline", row: 3, col: 2 },
-  { number: 13, symbol: "Al", name: "Aluminium", category: "post-transition", row: 3, col: 13 },
+  { number: 13, symbol: "Al", name: "Aluminium", category: "post-transition", row: 3, col: 13, supported: true, noModel: true, oxide: "Al2O3" },
   { number: 14, symbol: "Si", name: "Silicon", category: "metalloid", row: 3, col: 14, supported: true, oxide: "SiO2" },
-  { number: 15, symbol: "P", name: "Phosphorus", category: "nonmetal", row: 3, col: 15 },
+  { number: 15, symbol: "P", name: "Phosphorus", category: "nonmetal", row: 3, col: 15, supported: true, noModel: true, oxide: "P2O5" },
   { number: 16, symbol: "S", name: "Sulfur", category: "nonmetal", row: 3, col: 16 },
   { number: 17, symbol: "Cl", name: "Chlorine", category: "halogen", row: 3, col: 17 },
   { number: 18, symbol: "Ar", name: "Argon", category: "noble", row: 3, col: 18 },
@@ -40,7 +43,7 @@ export const PERIODIC_ELEMENTS: ElementData[] = [
   { number: 20, symbol: "Ca", name: "Calcium", category: "alkaline", row: 4, col: 2 },
   { number: 21, symbol: "Sc", name: "Scandium", category: "transition", row: 4, col: 3 },
   { number: 22, symbol: "Ti", name: "Titanium", category: "transition", row: 4, col: 4 },
-  { number: 23, symbol: "V", name: "Vanadium", category: "transition", row: 4, col: 5 },
+  { number: 23, symbol: "V", name: "Vanadium", category: "transition", row: 4, col: 5, supported: true, noModel: true, oxide: "V2O5" },
   { number: 24, symbol: "Cr", name: "Chromium", category: "transition", row: 4, col: 6 },
   { number: 25, symbol: "Mn", name: "Manganese", category: "transition", row: 4, col: 7 },
   { number: 26, symbol: "Fe", name: "Iron", category: "transition", row: 4, col: 8 },
@@ -49,8 +52,8 @@ export const PERIODIC_ELEMENTS: ElementData[] = [
   { number: 29, symbol: "Cu", name: "Copper", category: "transition", row: 4, col: 11 },
   { number: 30, symbol: "Zn", name: "Zinc", category: "transition", row: 4, col: 12 },
   { number: 31, symbol: "Ga", name: "Gallium", category: "post-transition", row: 4, col: 13 },
-  { number: 32, symbol: "Ge", name: "Germanium", category: "metalloid", row: 4, col: 14 },
-  { number: 33, symbol: "As", name: "Arsenic", category: "metalloid", row: 4, col: 15 },
+  { number: 32, symbol: "Ge", name: "Germanium", category: "metalloid", row: 4, col: 14, supported: true, noModel: true, oxide: "GeO2" },
+  { number: 33, symbol: "As", name: "Arsenic", category: "metalloid", row: 4, col: 15, supported: true, noModel: true, oxide: "As2O3" },
   { number: 34, symbol: "Se", name: "Selenium", category: "nonmetal", row: 4, col: 16 },
   { number: 35, symbol: "Br", name: "Bromine", category: "halogen", row: 4, col: 17 },
   { number: 36, symbol: "Kr", name: "Krypton", category: "noble", row: 4, col: 18 },

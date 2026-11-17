@@ -11,7 +11,3 @@ export function fixed(x: number, digits = 1): string {
   return (Math.round(x * f + 1e-6) / f).toFixed(digits);
 }
 
-/** "569.2 °C" from a Kelvin value. */
-export const formatC = (k: number, digits = 1) => `${fixed(kToC(k), digits)} °C`;
-/** "842.4 K" */
-export const formatK = (k: number, digits = 1) => `${fixed(k, digits)} K`;

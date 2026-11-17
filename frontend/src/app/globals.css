@@ -218,6 +218,13 @@ body {
 }
 .pt-selected .pt-symbol { font-weight: 600; }
 
+/* Glass former the models don't cover yet: selectable, dashed */
+.pt-nomodel {
+  border-style: dashed;
+  border-color: var(--ink-2);
+}
+.pt-nomodel .pt-symbol { font-weight: 500; }
+
 /* Oxygen: present in every oxide */
 .pt-implicit {
   color: var(--ink-2);
@@ -228,88 +235,4 @@ body {
 .pt-marker {
   color: var(--ink-3);
   border: 1px dashed var(--line);
-}
-
-/* ============================================================
-   Legacy "clay" styles, still used by Bank, Zen and Profile.
-   Delete this block once those screens are rebuilt.
-   ============================================================ */
-:root {
-  --text-main: #1e1e38;
-  --clay-base: #ffffff;
-  --clay-butter: #ffee8c;
-  --clay-lavender: #e4e0fd;
-  --clay-mint: #d5f4e6;
-  --clay-peach: #ffe5d9;
-  --clay-sky: #dcebfe;
-  --clay-rose: #fedce8;
-  --clay-outer: 8px 12px 24px rgba(125, 130, 175, 0.28), -6px -6px 16px rgba(255, 255, 255, 0.9);
-  --clay-inner: inset 2.5px 2.5px 4px rgba(255, 255, 255, 0.95), inset -3px -3px 6px rgba(135, 140, 180, 0.22);
-  --clay-btn-outer: 5px 7px 16px rgba(125, 130, 175, 0.3), -4px -4px 12px rgba(255, 255, 255, 0.95);
-  --clay-btn-pressed: inset 3.5px 3.5px 7px rgba(110, 115, 160, 0.35), inset -2.5px -2.5px 5px rgba(255, 255, 255, 0.85);
-  --clay-border: rgba(255, 255, 255, 0.9);
-}
-.dark {
-  --text-main: #f4f3fa;
-  --clay-base: #181926;
-  --clay-butter: #3a3518;
-  --clay-lavender: #23223d;
-  --clay-mint: #162b24;
-  --clay-peach: #361f1b;
-  --clay-sky: #17243b;
-  --clay-rose: #331a28;
-  --clay-outer: 10px 14px 28px rgba(0, 0, 0, 0.75), -5px -5px 16px rgba(45, 47, 72, 0.35);
-  --clay-inner: inset 2px 2px 4px rgba(75, 80, 120, 0.4), inset -3px -3px 6px rgba(0, 0, 0, 0.7);
-  --clay-btn-outer: 6px 8px 18px rgba(0, 0, 0, 0.7), -3px -3px 10px rgba(45, 47, 72, 0.3);
-  --clay-btn-pressed: inset 4px 4px 8px rgba(0, 0, 0, 0.8), inset -2px -2px 4px rgba(60, 65, 100, 0.4);
-  --clay-border: rgba(255, 255, 255, 0.08);
-}
-.clay-card {
-  background-color: var(--clay-base);
-  box-shadow: var(--clay-outer), var(--clay-inner);
-  border: 2px solid var(--clay-border);
-  border-radius: 26px;
-}
-.clay-butter, .clay-lavender, .clay-mint, .clay-peach, .clay-sky, .clay-rose {
-  box-shadow: var(--clay-outer), var(--clay-inner);
-  border: 2px solid var(--clay-border);
-  border-radius: 26px;
-}
-.clay-butter { background-color: var(--clay-butter) !important; color: #382a00; }
-.dark .clay-butter { color: #ffee8c !important; }
-.clay-lavender { background-color: var(--clay-lavender) !important; color: #27225a; }
-.dark .clay-lavender { color: #e2ddff !important; }
-.clay-mint { background-color: var(--clay-mint) !important; color: #0e3b27; }
-.dark .clay-mint { color: #baf2d8 !important; }
-.clay-peach { background-color: var(--clay-peach) !important; color: #4c2114; }
-.dark .clay-peach { color: #ffd2c1 !important; }
-.clay-sky { background-color: var(--clay-sky) !important; color: #12335e; }
-.dark .clay-sky { color: #cbe4fe !important; }
-.clay-rose { background-color: var(--clay-rose) !important; color: #4a172a; }
-.dark .clay-rose { color: #fedce8 !important; }
-.clay-btn {
-  background-color: var(--clay-base);
-  box-shadow: var(--clay-btn-outer), var(--clay-inner);
-  border: 2px solid var(--clay-border);
-  border-radius: 18px;
-  color: var(--text-main);
-  cursor: pointer;
-}
-.clay-btn:active { box-shadow: var(--clay-btn-pressed) !important; }
-.clay-btn-accent {
-  background: linear-gradient(135deg, #7a64f8, #5e46f2) !important;
-  color: #ffffff !important;
-  box-shadow: 6px 9px 20px rgba(94, 70, 242, 0.45), inset 2px 2px 4px rgba(255, 255, 255, 0.45);
-  border: 2px solid rgba(255, 255, 255, 0.4);
-}
-.clay-input {
-  background-color: var(--clay-base) !important;
-  box-shadow: inset 3px 3px 6px rgba(120, 125, 165, 0.28), inset -2.5px -2.5px 5px rgba(255, 255, 255, 0.95);
-  border: 2px solid var(--clay-border);
-  border-radius: 16px;
-  color: var(--text-main);
-  outline: none;
-}
-.dark .clay-input {
-  box-shadow: inset 3px 3px 6px rgba(0, 0, 0, 0.7), inset -2px -2px 4px rgba(45, 47, 72, 0.35);
 }

@@ -93,12 +93,12 @@ const Cell = memo(function Cell({
           data-symbol={el.symbol}
           onClick={() => onToggle(el)}
           aria-pressed={selected}
-          aria-label={`${el.name}, enters the glass as ${formula(el.oxide ?? "")}`}
-          title={`${el.name} → ${formula(el.oxide ?? "")}`}
+          aria-label={`${el.name}, enters the glass as ${formula(el.oxide ?? "")}${el.noModel ? ", no model yet" : ""}`}
+          title={`${el.name} → ${formula(el.oxide ?? "")}${el.noModel ? " · glass former, no model yet" : ""}`}
           whileHover={{ y: -2 }}
           whileTap={{ scale: 0.9 }}
           transition={SPRING}
-          className={`pt-cell ${selected ? "pt-selected" : "pt-supported"}`}
+          className={`pt-cell ${selected ? "pt-selected" : el.noModel ? "pt-supported pt-nomodel" : "pt-supported"}`}
         >
           {inner}
         </motion.button>

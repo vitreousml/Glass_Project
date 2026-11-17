@@ -15,7 +15,7 @@ export interface ScaleRow {
 }
 
 const GUTTER = 38; // room for row labels
-const VALUES_W = 128; // right column with each row's value
+const VALUES_W = 150; // right column with each row's value
 const AXIS_H = 30;
 const TOP = 14;
 
@@ -151,7 +151,7 @@ export function TemperatureScale({
                   <circle cy={cy} r={3.5} style={{ fill: color, stroke: "var(--ink)" }} strokeWidth={1.2} />
                 </motion.g>
                 {showValues && (
-                  <RowValue x={GUTTER + plotW + 14} y={cy + 4} valueC={r.valueC} kelvin={r.kelvin} fromC={countFromC} />
+                  <RowValue x={GUTTER + plotW + 14} y={cy + 4} valueC={r.valueC} maeC={r.maeC} kelvin={r.kelvin} fromC={countFromC} />
                 )}
               </g>
             );
@@ -176,14 +176,30 @@ export function TemperatureScale({
   );
 }
 
-function RowValue({ x, y, valueC, kelvin, fromC }: { x: number; y: number; valueC: number; kelvin?: number; fromC?: number }) {
+function RowValue({
+  x,
+  y,
+  valueC,
+  maeC,
+  kelvin,
+  fromC,
+}: {
+  x: number;
+  y: number;
+  valueC: number;
+  maeC?: number;
+  kelvin?: number;
+  fromC?: number;
+}) {
   const c = useAnimatedNumber(valueC, DURATION.data, fromC);
+  // Whole degrees: the models aren't more precise than that.
   return (
     <text x={x} y={y} fontSize={13} className="num" style={{ fill: "var(--ink)" }}>
-      {fixed(c)} °C
+      {fixed(c, 0)}
+      {maeC !== undefined && <tspan style={{ fill: "var(--ink-2)" }}> ± {fixed(maeC, 0)}</tspan>} °C
       {kelvin !== undefined && (
         <tspan dx={8} fontSize={11} style={{ fill: "var(--ink-3)" }}>
-          {fixed(kelvin)} K
+          {fixed(kelvin, 0)} K
         </tspan>
       )}
     </text>
