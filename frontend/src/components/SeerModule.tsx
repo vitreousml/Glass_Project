@@ -1,378 +1,315 @@
 "use client";
 
-import React, { useState } from "react";
-import { PERIODIC_ELEMENTS, ElementData } from "@/data/elements";
-import { Sparkles, Layers, AlertTriangle, ArrowRight, ShieldCheck } from "lucide-react";
-import { predictTg } from "@/lib/api";
+import React, { useEffect, useMemo, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
+import { AlertCircle, ArrowLeft, ArrowRight, X } from "lucide-react";
+import { PERIODIC_ELEMENTS, type ElementData } from "@/data/elements";
+import { getBankSummary, predictProperties, type CompositionBasis } from "@/lib/api";
+import { convertBasis, rangeRegion, rebalance, setOne, type Composition } from "@/lib/chem";
+import { DURATION, EASE_IN, SPRING, T } from "@/lib/motion";
+import { kToC } from "@/lib/units";
 import { useAuth } from "@/context/AuthContext";
+import { Button } from "@/components/ui/Button";
+import { Drawer } from "@/components/ui/Drawer";
+import { PeriodicTable } from "@/components/seer/PeriodicTable";
+import { SelectionBar } from "@/components/seer/SelectionBar";
+import { SetupStep } from "@/components/seer/SetupStep";
+import { CompositionStep } from "@/components/seer/CompositionStep";
+import { Results, type PredictResponse } from "@/components/seer/Results";
 
-interface PredictResult {
-  property: string;
-  model: string;
-  value: number;
-  unit: string;
-  warnings: string[];
-  composition_basis: string;
-}
+const ELEMENT_BY_SYMBOL = Object.fromEntries(PERIODIC_ELEMENTS.map((e) => [e.symbol, e]));
 
-const MODEL_CHOICES = [
-  { id: "RF", name: "Random Forest", mae: "14.85 K", r2: "0.878", desc: "Top accuracy across 80/20 test split.", colorClass: "clay-butter" },
-  { id: "XGB", name: "XGBoost", mae: "15.75 K", r2: "0.873", desc: "Gradient boosted decision trees.", colorClass: "clay-mint" },
-  { id: "KNN", name: "K-Nearest Neighbors", mae: "17.82 K", r2: "0.840", desc: "Distance-weighted composition regression.", colorClass: "clay-sky" },
-  { id: "SVM", name: "Support Vector Machine", mae: "22.37 K", r2: "0.785", desc: "Non-linear kernel boundary estimation.", colorClass: "clay-rose" },
-];
+const oxidesFor = (symbols: string[], excluded: string[]) =>
+  symbols
+    .map((s) => ELEMENT_BY_SYMBOL[s]?.oxide)
+    .filter((ox): ox is string => !!ox && !excluded.includes(ox));
+
+type Ranges = Record<string, { min: number; max: number }>;
+
+// Steps slide horizontally in the direction of travel.
+const stepVariants = {
+  enter: (dir: number) => ({ opacity: 0, x: dir * 24 }),
+  center: { opacity: 1, x: 0, transition: T.panel },
+  exit: (dir: number) => ({ opacity: 0, x: dir * -24, transition: { duration: DURATION.press, ease: EASE_IN } }),
+};
 
 export default function SeerModule() {
   const { token } = useAuth();
-  const [selectedElements, setSelectedElements] = useState<string[]>(["Si", "B", "Na"]);
-  const [composition, setComposition] = useState<{ [key: string]: number }>({
-    SiO2: 60,
-    B2O3: 20,
-    Na2O: 20,
-  });
 
-  const [chosenModel, setChosenModel] = useState<string>("RF");
-  const [loading, setLoading] = useState<boolean>(false);
-  const [results, setResults] = useState<PredictResult[] | null>(null);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string[]>([]); // element symbols, in click order
+  const [excluded, setExcluded] = useState<string[]>([]);
+  const [properties, setProperties] = useState<string[]>(["Tg"]);
+  const [model, setModel] = useState("RF");
+  const [basis, setBasis] = useState<CompositionBasis>("mol");
+  const [composition, setComposition] = useState<Composition>({}); // in `basis`, sums to 100
+
+  const [open, setOpen] = useState(false);
+  const [step, setStep] = useState<{ n: 1 | 2; dir: number }>({ n: 1, dir: 0 });
+
+  const [loading, setLoading] = useState(false);
+  const [response, setResponse] = useState<PredictResponse | null>(null);
+  const [responseKey, setResponseKey] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [ranges, setRanges] = useState<Ranges | null>(null);
+
+  // Training ranges (public summary; no individual rows) for the ternary and the temperature scale.
+  useEffect(() => {
+    getBankSummary()
+      .then((s) => setRanges(s.ranges ?? null))
+      .catch(() => setRanges(null));
+  }, []);
+
+  const allOxides = oxidesFor(selected, []);
+  const activeOxides = oxidesFor(selected, excluded);
+  const canContinue = activeOxides.length > 0 && properties.length > 0;
+  const currentStep = canContinue ? step.n : 1;
+
+  const region = useMemo(() => (ranges ? rangeRegion(ranges) : []), [ranges]);
+  const rangeC: [number, number] | undefined = ranges?.Tg ? [kToC(ranges.Tg.min), kToC(ranges.Tg.max)] : undefined;
+
+  // Identifies the inputs, so an old result can show it's out of date.
+  const requestKey = JSON.stringify({
+    c: activeOxides.map((ox) => [ox, (composition[ox] ?? 0).toFixed(2)]),
+    basis,
+    model,
+    properties,
+  });
+  const stale = response !== null && responseKey !== requestKey;
+
+  const updateSelection = (symbols: string[], nextExcluded: string[]) => {
+    setSelected(symbols);
+    setExcluded(nextExcluded);
+    setComposition((prev) => rebalance(prev, oxidesFor(symbols, nextExcluded)));
+    if (symbols.length === 0) setOpen(false);
+  };
 
   const toggleElement = (el: ElementData) => {
     if (!el.supported) return;
-    const isSelected = selectedElements.includes(el.symbol);
-    if (isSelected) {
-      if (selectedElements.length <= 1) return;
-      const updated = selectedElements.filter((s) => s !== el.symbol);
-      setSelectedElements(updated);
-      if (el.oxide) {
-        const nextComp = { ...composition };
-        delete nextComp[el.oxide];
-        normalizeComposition(nextComp);
-      }
-    } else {
-      setSelectedElements([...selectedElements, el.symbol]);
-      if (el.oxide) {
-        const nextComp = { ...composition, [el.oxide]: 10 };
-        normalizeComposition(nextComp);
-      }
-    }
+    const symbols = selected.includes(el.symbol) ? selected.filter((s) => s !== el.symbol) : [...selected, el.symbol];
+    updateSelection(symbols, excluded.filter((ox) => ox !== el.oxide));
   };
 
-  const normalizeComposition = (comp: { [key: string]: number }) => {
-    const keys = Object.keys(comp);
-    if (keys.length === 0) return;
-    const currentSum = keys.reduce((acc, k) => acc + (comp[k] || 0), 0);
-    if (currentSum === 0) {
-      const equalShare = parseFloat((100 / keys.length).toFixed(1));
-      const res: { [key: string]: number } = {};
-      keys.forEach((k) => (res[k] = equalShare));
-      setComposition(res);
-      return;
-    }
-    const scaled: { [key: string]: number } = {};
-    keys.forEach((k) => {
-      scaled[k] = parseFloat(((comp[k] / currentSum) * 100).toFixed(1));
-    });
-    setComposition(scaled);
+  const toggleOxide = (ox: string) =>
+    updateSelection(selected, excluded.includes(ox) ? excluded.filter((o) => o !== ox) : [...excluded, ox]);
+
+  const toggleProperty = (id: string) =>
+    setProperties((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+
+  const switchBasis = (to: CompositionBasis) => {
+    if (to === basis) return;
+    setComposition((c) => convertBasis(c, to));
+    setBasis(to);
   };
 
-  const handleSliderChange = (oxide: string, val: number) => {
-    const nextComp = { ...composition, [oxide]: val };
-    const otherOxides = Object.keys(nextComp).filter((k) => k !== oxide);
-    const rem = 100 - val;
-    if (otherOxides.length === 1) {
-      nextComp[otherOxides[0]] = Math.max(0, parseFloat(rem.toFixed(1)));
-    } else if (otherOxides.length > 1) {
-      const currentOthersSum = otherOxides.reduce((acc, k) => acc + (composition[k] || 0), 0);
-      otherOxides.forEach((k) => {
-        const ratio = currentOthersSum > 0 ? (composition[k] || 0) / currentOthersSum : 1 / otherOxides.length;
-        nextComp[k] = Math.max(0, parseFloat((rem * ratio).toFixed(1)));
-      });
-    }
-    setComposition(nextComp);
-  };
+  const goStep = (n: 1 | 2) => setStep((s) => ({ n, dir: n > s.n ? 1 : -1 }));
 
-  const executePrediction = async () => {
+  const predict = async () => {
     setLoading(true);
-    setErrorMsg(null);
-    setResults(null);
+    setError(null);
     try {
-      const comp = {
-        SiO2: composition["SiO2"] || 0,
-        B2O3: composition["B2O3"] || 0,
-        Na2O: composition["Na2O"] || 0,
-      };
-
-      const data = await predictTg(comp, chosenModel, token);
-      setResults(data.results);
-    } catch (err: any) {
-      setErrorMsg(err.message || "Failed to reach prediction server.");
+      const comp: Composition = {};
+      activeOxides.forEach((ox) => (comp[ox] = Number((composition[ox] ?? 0).toFixed(4))));
+      const data: PredictResponse = await predictProperties(comp, basis, model, properties, token);
+      setResponse(data);
+      setResponseKey(requestKey);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't reach the prediction server.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="space-y-6">
-      {/* Banner in User's Butter Yellow #FFEE8C */}
-      <div className="clay-card clay-butter p-6 sm:p-8">
-        <div className="flex items-center gap-4">
-          <div className="p-3.5 rounded-2xl bg-white/70 dark:bg-black/30 shadow-sm shrink-0">
-            <Sparkles className="w-7 h-7 text-amber-900 dark:text-amber-200" />
-          </div>
-          <div>
-            <h2 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 dark:text-amber-100">
-              Seer: Interactive Periodic Table & $T_g$ Predictor
-            </h2>
-            <p className="text-xs sm:text-sm opacity-80 mt-1 font-semibold">
-              Select elements, adjust composition in <strong>mol %</strong>, choose which of the 4 models to evaluate, and inspect Glass Transition Temperature ($T_g$) in <strong>Kelvin (K)</strong>.
-            </p>
-          </div>
+    <div className="flex h-full min-h-[460px] flex-col">
+      <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2 pb-3">
+        <div>
+          <h1 className="text-lg font-semibold">Seer</h1>
+          <p className="text-sm text-ink-2">Select the elements in your glass, then set up the prediction.</p>
         </div>
+        <ul className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-2" aria-label="Legend">
+          <Legend swatch="pt-supported" label="Has model data" />
+          <Legend swatch="pt-selected" label="Selected" />
+          <Legend swatch="pt-implicit" label="Oxygen, in every oxide" />
+          <Legend swatch="pt-off" label="No data yet" />
+        </ul>
+      </header>
+
+      <div className="min-h-[300px] flex-1 md:min-h-0">
+        <PeriodicTable selected={selected} onToggle={toggleElement} />
       </div>
 
-      {/* Step 1: Periodic Table in Lavender Clay Card */}
-      <div className="clay-card clay-lavender p-6 sm:p-8 space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h3 className="text-base font-black flex items-center gap-2">
-              <span className="flex items-center justify-center w-6 h-6 rounded-xl clay-btn-accent text-white text-xs font-black">1</span>
-              Select Periodic Table Elements
-            </h3>
-            <p className="text-xs opacity-75 mt-0.5 font-medium">
-              Active models accept <strong>Si (SiO₂)</strong>, <strong>B (B₂O₃)</strong>, and <strong>Na (Na₂O)</strong> with implicit <strong>O</strong> matrix.
-            </p>
+      <SelectionBar
+        selected={selected}
+        onRemove={(sym) => toggleElement(ELEMENT_BY_SYMBOL[sym])}
+        onClear={() => updateSelection([], [])}
+        onContinue={() => setOpen(true)}
+      />
+
+      <Drawer open={open} onClose={() => setOpen(false)} label="Prediction setup">
+        {/* Header */}
+        <div className="shrink-0 border-b border-line px-5 pt-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold">Prediction setup</h2>
+              <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                {selected.map((sym) => (
+                  <span key={sym} className="rounded-sm bg-ink px-1.5 py-0.5 text-xs font-semibold text-paper">
+                    {sym}
+                  </span>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  className="ml-1 text-xs text-ink-2 underline decoration-line-strong underline-offset-2 hover:text-ink"
+                >
+                  Edit elements
+                </button>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              aria-label="Close"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink"
+            >
+              <X className="h-4 w-4" aria-hidden />
+            </button>
           </div>
 
-          <div className="flex items-center gap-2 text-[11px] font-black">
-            <span className="px-3 py-1 rounded-xl clay-butter">
-              ● Supported Element
-            </span>
-            <span className="px-3 py-1 rounded-xl clay-peach">
-              ● Implicit Oxygen Matrix
-            </span>
-          </div>
-        </div>
-
-        {/* Periodic Table Grid */}
-        <div className="overflow-x-auto pb-3 pt-1">
-          <div className="grid grid-cols-18 gap-1.5 min-w-[760px]">
-            {PERIODIC_ELEMENTS.map((el) => {
-              const isSelected = selectedElements.includes(el.symbol);
-              const isSupported = el.supported;
-              const isImplicit = el.implicit;
-
+          <nav aria-label="Steps" className="mt-3 flex gap-5">
+            {(
+              [
+                { n: 1, label: "Oxides, property, model" },
+                { n: 2, label: "Composition and result" },
+              ] as const
+            ).map((s) => {
+              const on = currentStep === s.n;
               return (
                 <button
-                  key={el.number}
-                  disabled={!isSupported && !isImplicit}
-                  onClick={() => toggleElement(el)}
-                  style={{ gridRow: el.row, gridColumn: el.col }}
-                  title={
-                    isSupported
-                      ? `${el.name} (${el.symbol}) -> maps to ${el.oxide}`
-                      : isImplicit
-                      ? `${el.name} (Implicit Oxygen Matrix)`
-                      : `${el.name} (${el.symbol}) - Not in training dataset`
-                  }
-                  className={`
-                    relative flex flex-col items-center justify-center p-1.5 rounded-xl text-center transition-all duration-150
-                    ${
-                      isSupported && isSelected
-                        ? "clay-btn-accent scale-105 z-10 font-black shadow-lg"
-                        : isSupported
-                        ? "clay-btn clay-butter font-black hover:scale-102"
-                        : isImplicit
-                        ? "clay-peach opacity-90 cursor-default font-bold"
-                        : "opacity-30 cursor-not-allowed bg-black/5 dark:bg-white/5 text-slate-400"
-                    }
-                  `}
+                  key={s.n}
+                  type="button"
+                  disabled={s.n === 2 && !canContinue}
+                  aria-current={on ? "step" : undefined}
+                  onClick={() => goStep(s.n)}
+                  className={`relative pb-2 text-sm transition-colors disabled:opacity-40 ${
+                    on ? "text-ink" : "text-ink-2 hover:text-ink"
+                  }`}
                 >
-                  <span className="text-[9px] opacity-70 leading-none">{el.number}</span>
-                  <span className="text-xs font-black">{el.symbol}</span>
-                  <span className="text-[7.5px] truncate w-full font-bold">{el.name}</span>
+                  <span className="num mr-1.5 text-ink-3">{s.n}</span>
+                  {s.label}
+                  {on && (
+                    <motion.span
+                      layoutId="seer-step"
+                      transition={SPRING}
+                      className="absolute right-0 bottom-0 left-0 h-0.5 rounded-full bg-ink"
+                    />
+                  )}
                 </button>
               );
             })}
-          </div>
-        </div>
-      </div>
-
-      {/* Step 2 & 3: Sliders (Mint) & Model Selection (Sky) */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Sliders in Mint Pastel */}
-        <div className="clay-card clay-mint p-6 sm:p-8 flex flex-col justify-between">
-          <div>
-            <h3 className="text-base font-black flex items-center gap-2 mb-1">
-              <span className="flex items-center justify-center w-6 h-6 rounded-xl bg-emerald-600 text-white text-xs font-black">2</span>
-              Configure Composition (mol %)
-            </h3>
-            <p className="text-xs opacity-75 mb-6 font-semibold">
-              Sliders maintain sum-constraint at <strong>100.0 mol %</strong>.
-            </p>
-
-            <div className="space-y-6">
-              {["SiO2", "B2O3", "Na2O"].map((ox) => {
-                const val = composition[ox] || 0;
-                return (
-                  <div key={ox} className="space-y-2">
-                    <div className="flex justify-between items-center text-xs font-black">
-                      <span>{ox}</span>
-                      <span className="px-3 py-1 rounded-xl clay-btn clay-butter font-mono font-black text-slate-900">
-                        {val.toFixed(1)} mol %
-                      </span>
-                    </div>
-                    <input
-                      type="range"
-                      min="0"
-                      max="100"
-                      step="0.5"
-                      value={val}
-                      onChange={(e) => handleSliderChange(ox, parseFloat(e.target.value))}
-                      className="w-full"
-                    />
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="mt-8 pt-4 border-t border-black/10 dark:border-white/10 flex items-center justify-between text-xs font-black">
-            <span className="opacity-75">Total Basis:</span>
-            <span className="px-3 py-1 rounded-xl clay-btn font-mono font-black">
-              {(Object.values(composition).reduce((a, b) => a + b, 0)).toFixed(1)} mol %
-            </span>
-          </div>
+          </nav>
         </div>
 
-        {/* Model Selection in Sky Pastel */}
-        <div className="clay-card clay-sky p-6 sm:p-8 flex flex-col justify-between">
-          <div>
-            <h3 className="text-base font-black flex items-center gap-2 mb-1">
-              <span className="flex items-center justify-center w-6 h-6 rounded-xl bg-sky-600 text-white text-xs font-black">3</span>
-              Select Machine Learning Model
-            </h3>
-            <p className="text-xs opacity-75 mb-4 font-semibold">
-              Pick which of the 4 models to run, or compare all 4:
-            </p>
-
-            {/* 4 Models with Distinct Clay Color Badges */}
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              {MODEL_CHOICES.map((m) => {
-                const isSelected = chosenModel === m.id;
-                return (
-                  <button
-                    key={m.id}
-                    onClick={() => setChosenModel(m.id)}
-                    className={`p-3.5 rounded-2xl text-left transition-all ${
-                      isSelected
-                        ? "clay-btn-accent scale-102 font-black"
-                        : "clay-btn " + m.colorClass
-                    }`}
-                  >
-                    <div className="flex justify-between items-center mb-1">
-                      <span className="font-black text-xs">{m.name}</span>
-                      <span className={`text-[10px] font-mono px-2 py-0.5 rounded-lg ${isSelected ? "bg-white/20 text-white" : "bg-black/10 dark:bg-white/20"} font-black`}>
-                        MAE {m.mae}
-                      </span>
-                    </div>
-                    <p className={`text-[11px] font-semibold leading-snug line-clamp-2 ${isSelected ? "text-white/90" : "opacity-75"}`}>
-                      {m.desc}
-                    </p>
-                  </button>
-                );
-              })}
-            </div>
-
-            <button
-              onClick={() => setChosenModel("ALL")}
-              className={`w-full py-2.5 px-3 rounded-2xl text-xs font-black flex items-center justify-center gap-2 transition-all ${
-                chosenModel === "ALL"
-                  ? "clay-btn-accent"
-                  : "clay-btn clay-butter"
-              }`}
+        {/* Body */}
+        <div className="relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-5 py-4">
+          <AnimatePresence mode="wait" initial={false} custom={step.dir}>
+            <motion.div
+              key={currentStep}
+              custom={step.dir}
+              variants={stepVariants}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              className="space-y-6"
             >
-              <Layers className="w-3.5 h-3.5" />
-              Compare All 4 Models (RF, XGB, KNN, SVM)
-            </button>
-          </div>
-
-          <div className="mt-8 pt-4 border-t border-black/10 dark:border-white/10">
-            <button
-              disabled={loading}
-              onClick={executePrediction}
-              className="w-full py-3.5 px-4 clay-btn-accent font-black text-xs uppercase tracking-wider rounded-2xl flex items-center justify-center gap-2 disabled:opacity-50"
-            >
-              {loading ? (
-                <span>Calculating $T_g$...</span>
+              {currentStep === 1 ? (
+                <SetupStep
+                  oxides={allOxides}
+                  excluded={excluded}
+                  onToggleOxide={toggleOxide}
+                  properties={properties}
+                  onToggleProperty={toggleProperty}
+                  model={model}
+                  onModel={setModel}
+                />
               ) : (
                 <>
-                  <span>Run Prediction ({chosenModel})</span>
-                  <ArrowRight className="w-4 h-4" />
+                  <CompositionStep
+                    oxides={activeOxides}
+                    composition={composition}
+                    basis={basis}
+                    onBasis={switchBasis}
+                    onSet={(ox, v) => setComposition((c) => setOne(c, ox, v))}
+                    region={region}
+                  />
+                  <AnimatePresence initial={false}>
+                    {error && (
+                      <motion.p
+                        role="alert"
+                        className="flex items-start gap-2 rounded-md bg-danger-bg px-3 py-2 text-sm text-danger"
+                        initial={{ opacity: 0, y: -4 }}
+                        animate={{ opacity: 1, y: 0, transition: T.small }}
+                        exit={{ opacity: 0, transition: T.exit }}
+                      >
+                        <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+                        {error}
+                      </motion.p>
+                    )}
+                  </AnimatePresence>
+                  {response && <Results response={response} stale={stale} rangeC={rangeC} />}
                 </>
               )}
-            </button>
-          </div>
+            </motion.div>
+          </AnimatePresence>
         </div>
-      </div>
 
-      {/* Error Card */}
-      {errorMsg && (
-        <div className="clay-card clay-rose p-4 text-xs font-black flex items-center gap-3">
-          <AlertTriangle className="w-4 h-4 flex-shrink-0 text-rose-700" />
-          <span>{errorMsg}</span>
+        {/* Footer */}
+        <div className="flex shrink-0 items-center gap-2 border-t border-line px-5 py-3">
+          {currentStep === 1 ? (
+            <Button variant="primary" size="lg" className="flex-1" disabled={!canContinue} onClick={() => goStep(2)}>
+              Next: composition
+              <ArrowRight className="h-4 w-4" aria-hidden />
+            </Button>
+          ) : (
+            <>
+              <Button variant="secondary" size="lg" onClick={() => goStep(1)}>
+                <ArrowLeft className="h-4 w-4" aria-hidden />
+                Back
+              </Button>
+              <Button
+                variant="primary"
+                size="lg"
+                className="flex-1 overflow-hidden"
+                disabled={loading}
+                aria-busy={loading}
+                onClick={predict}
+              >
+                {loading ? "Predicting…" : `Predict${model === "ALL" ? " with all four" : ` with ${model}`}`}
+                {!loading && <ArrowRight className="h-4 w-4" aria-hidden />}
+                {/* The button is the progress indicator while the request runs */}
+                {loading && (
+                  <motion.span
+                    aria-hidden
+                    className="absolute bottom-0 left-0 h-0.5 w-1/3 bg-paper/80"
+                    initial={{ x: "-100%" }}
+                    animate={{ x: "300%" }}
+                    transition={{ duration: 0.9, ease: "linear", repeat: Infinity }}
+                  />
+                )}
+              </Button>
+            </>
+          )}
         </div>
-      )}
-
-      {/* Results in High-Contrast Clay Cards */}
-      {results && (
-        <div className="clay-card p-6 sm:p-8 space-y-6">
-          <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-black/10 dark:border-white/10">
-            <div>
-              <h3 className="text-lg font-black flex items-center gap-2">
-                <ShieldCheck className="w-5 h-5 text-emerald-500" />
-                Prediction Results ($T_g$ in Kelvin)
-              </h3>
-              <p className="text-xs opacity-75 font-semibold mt-0.5">
-                Evaluated for SiO₂: {composition.SiO2}%, B₂O₃: {composition.B2O3}%, Na₂O: {composition.Na2O}% (mol %)
-              </p>
-            </div>
-            <span className="px-3.5 py-1.5 rounded-xl clay-card clay-butter font-mono text-xs font-black text-slate-900">
-              Unit: Kelvin (K)
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {results.map((res, i) => {
-              const pastelOrder = ["clay-butter", "clay-mint", "clay-sky", "clay-peach"];
-              const colorClass = pastelOrder[i % pastelOrder.length];
-              return (
-                <div key={res.model} className={`clay-card ${colorClass} p-5 flex flex-col justify-between`}>
-                  <div>
-                    <div className="flex justify-between items-center mb-1">
-                      <span className="font-black text-sm">{res.model}</span>
-                      <span className="text-[10px] font-black opacity-60">Glass Transition</span>
-                    </div>
-                    <div className="text-3xl font-black font-mono tracking-tight my-2">
-                      {res.value.toFixed(2)} <span className="text-sm font-bold opacity-75">K</span>
-                    </div>
-                  </div>
-
-                  {res.warnings && res.warnings.length > 0 && (
-                    <div className="mt-3 pt-3 border-t border-black/10 dark:border-white/10">
-                      {res.warnings.map((w, idx) => (
-                        <p key={idx} className="text-[10px] font-black text-amber-700 dark:text-amber-300 flex items-start gap-1">
-                          <AlertTriangle className="w-3 h-3 flex-shrink-0 mt-0.5" />
-                          {w}
-                        </p>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      </Drawer>
     </div>
+  );
+}
+
+function Legend({ swatch, label }: { swatch: string; label: string }) {
+  return (
+    <li className="flex items-center gap-1.5">
+      <span className={`inline-block h-3 w-3 rounded-[3px] border ${swatch}`} aria-hidden />
+      {label}
+    </li>
   );
 }

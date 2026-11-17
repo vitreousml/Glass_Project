@@ -23,11 +23,26 @@ export const getBankSummary = () => call("/api/v1/bank/summary");
 // Tells the backend "this person just signed in": it saves their name and email.
 export const recordLogin = (token: string | null) => call("/api/v1/auth/me", {}, token);
 
-export const predictTg = (composition: Record<string, number>, model: string, token: string | null) =>
+// "mol" = mol %, "wt" = weight %. The backend converts weight % to mol % itself.
+export type CompositionBasis = "mol" | "wt";
+
+// Returns every value in Kelvin; the page converts to °C for display.
+export const predictProperties = (
+  composition: Record<string, number>,
+  basis: CompositionBasis,
+  model: string,
+  properties: string[],
+  token: string | null,
+) =>
   call("/api/v1/predict", {
     method: "POST",
     // The page uses "ALL" for "every model"; the backend wants no model name for that.
-    body: JSON.stringify({ composition, model_name: model === "ALL" ? null : model }),
+    body: JSON.stringify({
+      composition,
+      composition_basis: basis,
+      model_name: model === "ALL" ? null : model,
+      properties,
+    }),
   }, token);
 
 export const discoverCompositions = (targetTg: number, tolerance: number, model: string, token: string | null) =>

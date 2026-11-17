@@ -29,6 +29,19 @@ OXIDE_MAP = {
     "B": "B2O3",
     "Na": "Na2O"
 }
+SUPPORTED_OXIDES = list(OXIDE_MAP.values())
+
+# Molar masses in g/mol, used to turn weight % into mol % (the models were trained on mol %).
+MOLAR_MASSES = {
+    "SiO2": 60.084,
+    "B2O3": 69.620,
+    "Na2O": 61.979,
+}
+
+# Properties that have trained models. Add an entry here when a new model is ready.
+PROPERTIES = {
+    "Tg": {"name": "Glass transition temperature", "unit": CONFIRMED_UNIT},
+}
 
 EXPECTED_HASHES = {
     "Tg_RF.pkl": "39F888306D108A8948B84B6312E48753D598F3A09AF7B1E1D76620376DBE487F",
@@ -109,4 +122,20 @@ def predict_all_models(composition: Dict[str, float]) -> List[Dict[str, Any]]:
     for m in MODELS:
         results.append(predict_single_model(composition, m))
     return results
+
+def wt_to_mol_percent(composition: Dict[str, float]) -> Dict[str, float]:
+    """
+    Convert an oxide composition from weight % to mol %.
+    Each oxide's moles = weight / molar mass; the result is rescaled to sum to 100.
+    """
+    moles = {ox: float(w) / MOLAR_MASSES[ox] for ox, w in composition.items()}
+    total = sum(moles.values())
+    if total <= 0:
+        raise ValueError("Composition must contain at least one oxide above 0.")
+    return {ox: 100.0 * n / total for ox, n in moles.items()}
+
+# One prediction function per property; all of them return values in Kelvin.
+PREDICTORS = {
+    "Tg": predict_single_model,
+}
 

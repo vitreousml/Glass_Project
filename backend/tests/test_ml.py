@@ -30,3 +30,22 @@ def test_predict_all_models():
     model_names = [r["model"] for r in results]
     assert set(model_names) == {"RF", "XGB", "KNN", "SVM"}
 
+
+def test_wt_to_mol_equal_moles():
+    # Weights equal to each molar mass are one mole each, so 1/3 mol % apiece.
+    comp_wt = dict(ml_adapter.MOLAR_MASSES)
+    comp_mol = ml_adapter.wt_to_mol_percent(comp_wt)
+    for ox in comp_wt:
+        assert comp_mol[ox] == pytest.approx(100.0 / 3)
+
+def test_wt_to_mol_known_glass():
+    # 60/20/20 mol % SiO2/B2O3/Na2O is about 57.80/22.32/19.87 wt %.
+    comp_mol = ml_adapter.wt_to_mol_percent({"SiO2": 57.8007, "B2O3": 22.3248, "Na2O": 19.8746})
+    assert comp_mol["SiO2"] == pytest.approx(60.0, abs=0.01)
+    assert comp_mol["B2O3"] == pytest.approx(20.0, abs=0.01)
+    assert comp_mol["Na2O"] == pytest.approx(20.0, abs=0.01)
+    assert sum(comp_mol.values()) == pytest.approx(100.0)
+
+def test_wt_to_mol_rejects_empty():
+    with pytest.raises(ValueError):
+        ml_adapter.wt_to_mol_percent({"SiO2": 0.0})

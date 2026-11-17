@@ -2,191 +2,306 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* ============================================================
+   Design tokens
+   Warm paper (light) and kiln charcoal (dark). Ink is the only
+   interactive accent. The heat ramp (ember -> butter) is used
+   ONLY to encode temperature.
+   ============================================================ */
 :root {
-  /* Crisp differentiated backdrop - clean soft neutral slate-violet */
-  --bg-color: #ECEBF5;
-  --text-main: #1E1E38;
-  --text-muted: #5E5D7A;
+  --paper: #f5f2ea;
+  --surface: #fffdf8;
+  --surface-2: #eeeae0;
+  --line: #e1dbce;
+  --line-strong: #c9c0ae;
+  --ink: #1d1b17;
+  --ink-2: #57524a;
+  --ink-3: #726c60;
 
-  /* Distinct Pastel Component Palette (Light) */
-  --clay-base: #FFFFFF;
-  --clay-butter: #FFEE8C;     /* User uploaded pastel butter yellow */
-  --clay-lavender: #E4E0FD;   /* Soft peri-lavender */
-  --clay-mint: #D5F4E6;       /* Crisp fresh sage-mint */
-  --clay-peach: #FFE5D9;      /* Warm soft coral-peach */
-  --clay-sky: #DCEBFE;        /* Soft airy sky blue */
-  --clay-rose: #FEDCE8;       /* Gentle blossom rose */
+  --heat-1: #a8301c; /* ember: cold end of the ramp */
+  --heat-2: #dc5a1f;
+  --heat-3: #f2a23b;
+  --heat-4: #ffee8c; /* butter: hot end */
 
-  /* Clay Shadows Light - deep sculpted 3D bevels so cards 'pop' distinct from bg */
-  --clay-outer: 8px 12px 24px rgba(125, 130, 175, 0.28), -6px -6px 16px rgba(255, 255, 255, 0.9);
-  --clay-inner: inset 2.5px 2.5px 4px rgba(255, 255, 255, 0.95), inset -3px -3px 6px rgba(135, 140, 180, 0.22);
-  
-  --clay-btn-outer: 5px 7px 16px rgba(125, 130, 175, 0.3), -4px -4px 12px rgba(255, 255, 255, 0.95);
-  --clay-btn-pressed: inset 3.5px 3.5px 7px rgba(110, 115, 160, 0.35), inset -2.5px -2.5px 5px rgba(255, 255, 255, 0.85);
+  --warn: #855600;
+  --warn-bg: #fbf1da;
+  --danger: #a3271a;
+  --danger-bg: #fbe7e2;
 
-  --clay-border: rgba(255, 255, 255, 0.9);
+  --elev-float: 0 1px 2px rgb(29 27 23 / 0.06), 0 18px 44px -14px rgb(29 27 23 / 0.24);
 }
 
 .dark {
-  /* Deep obsidian violet backdrop in dark mode */
-  --bg-color: #0E0F17;
-  --text-main: #F4F3FA;
-  --text-muted: #A3A2C2;
+  --paper: #141311;
+  --surface: #1b1a17;
+  --surface-2: #25231f;
+  --line: #2e2c27;
+  --line-strong: #423e36;
+  --ink: #ece7dc;
+  --ink-2: #aaa396;
+  --ink-3: #8f897d;
 
-  /* Saturated muted pastels for rich dark clay pop */
-  --clay-base: #181926;
-  --clay-butter: #3A3518;     /* Rich dark golden butter tone */
-  --clay-lavender: #23223D;   /* Dark violet slate */
-  --clay-mint: #162B24;       /* Dark evergreen mint */
-  --clay-peach: #361F1B;      /* Dark coral tone */
-  --clay-sky: #17243B;        /* Dark midnight sky */
-  --clay-rose: #331A28;       /* Dark berry rose */
+  --heat-1: #e2553b;
+  --heat-2: #f07a2e;
+  --heat-3: #f6b04a;
+  --heat-4: #ffee8c;
 
-  /* Clay Shadows Dark - luminous edge highlight and deep soft ambient drops */
-  --clay-outer: 10px 14px 28px rgba(0, 0, 0, 0.75), -5px -5px 16px rgba(45, 47, 72, 0.35);
-  --clay-inner: inset 2px 2px 4px rgba(75, 80, 120, 0.4), inset -3px -3px 6px rgba(0, 0, 0, 0.7);
+  --warn: #f3c46b;
+  --warn-bg: #2e2414;
+  --danger: #f08a78;
+  --danger-bg: #351b16;
 
-  --clay-btn-outer: 6px 8px 18px rgba(0, 0, 0, 0.7), -3px -3px 10px rgba(45, 47, 72, 0.3);
-  --clay-btn-pressed: inset 4px 4px 8px rgba(0, 0, 0, 0.8), inset -2px -2px 4px rgba(60, 65, 100, 0.4);
+  --elev-float: 0 1px 2px rgb(0 0 0 / 0.4), 0 22px 52px -14px rgb(0 0 0 / 0.7);
+}
 
-  --clay-border: rgba(255, 255, 255, 0.08);
+@theme inline {
+  --color-paper: var(--paper);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-heat-1: var(--heat-1);
+  --color-heat-2: var(--heat-2);
+  --color-heat-3: var(--heat-3);
+  --color-heat-4: var(--heat-4);
+  --color-warn: var(--warn);
+  --color-warn-bg: var(--warn-bg);
+  --color-danger: var(--danger);
+  --color-danger-bg: var(--danger-bg);
+
+  --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+
+  --shadow-float: var(--elev-float);
+}
+
+/* Type scale (12/13/15/18/24/36) and radii. Nothing smaller than 12 px. */
+@theme {
+  --text-xs: 12px;
+  --text-xs--line-height: 16px;
+  --text-sm: 13px;
+  --text-sm--line-height: 18px;
+  --text-base: 15px;
+  --text-base--line-height: 22px;
+  --text-lg: 18px;
+  --text-lg--line-height: 24px;
+  --text-xl: 24px;
+  --text-xl--line-height: 30px;
+  --text-2xl: 36px;
+  --text-2xl--line-height: 40px;
+
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 12px;
+}
+
+/* ============================================================
+   Base
+   ============================================================ */
+html {
+  background-color: var(--paper);
 }
 
 body {
-  background-color: var(--bg-color) !important;
-  color: var(--text-main) !important;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-  transition: background-color 0.25s ease, color 0.25s ease;
+  background-color: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 22px;
   min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
 }
 
-/* Base Sculpted Clay Card */
+:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+/* Every number: monospaced with tabular figures */
+.num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Theme switch crossfade (document.startViewTransition) */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 320ms;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}
+
+/* ============================================================
+   Seer periodic table
+   The grid sizes every cell to fill the screen; text scales
+   with the cell through container-query units.
+   ============================================================ */
+.pt-grid {
+  display: grid;
+  grid-template-columns: repeat(18, minmax(0, 1fr));
+  /* 7 periods, a thin gap, then lanthanides and actinides */
+  grid-template-rows: repeat(7, minmax(0, 1fr)) minmax(0, 0.4fr) repeat(2, minmax(0, 1fr));
+  gap: 3px;
+}
+
+.pt-cell {
+  container-type: size;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  line-height: 1;
+  overflow: hidden;
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+.pt-number {
+  font-family: var(--font-mono);
+  font-size: clamp(7px, 16cqmin, 11px);
+}
+.pt-symbol {
+  font-size: clamp(10px, 38cqmin, 22px);
+  font-weight: 500;
+  margin: 0.1em 0;
+}
+.pt-name {
+  font-size: clamp(7px, 12cqmin, 10px);
+  max-width: 100%;
+  padding: 0 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@container (max-height: 46px) {
+  .pt-name { display: none; }
+}
+@container (max-height: 28px) {
+  .pt-number { display: none; }
+}
+
+/* No trained data for this element */
+.pt-off {
+  color: var(--ink-3);
+  border-color: var(--line);
+  opacity: 0.55;
+}
+.pt-off .pt-symbol { font-weight: 400; }
+
+/* The models accept this element */
+.pt-supported {
+  background-color: var(--surface);
+  color: var(--ink);
+  border-color: var(--ink);
+  cursor: pointer;
+}
+.pt-supported .pt-symbol { font-weight: 600; }
+.pt-supported:hover { background-color: var(--surface-2); }
+
+.pt-selected {
+  background-color: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+  cursor: pointer;
+}
+.pt-selected .pt-symbol { font-weight: 600; }
+
+/* Oxygen: present in every oxide */
+.pt-implicit {
+  color: var(--ink-2);
+  border: 1px dashed var(--line-strong);
+}
+
+/* "57-71" / "89-103" placeholders in the main table */
+.pt-marker {
+  color: var(--ink-3);
+  border: 1px dashed var(--line);
+}
+
+/* ============================================================
+   Legacy "clay" styles, still used by Bank, Zen and Profile.
+   Delete this block once those screens are rebuilt.
+   ============================================================ */
+:root {
+  --text-main: #1e1e38;
+  --clay-base: #ffffff;
+  --clay-butter: #ffee8c;
+  --clay-lavender: #e4e0fd;
+  --clay-mint: #d5f4e6;
+  --clay-peach: #ffe5d9;
+  --clay-sky: #dcebfe;
+  --clay-rose: #fedce8;
+  --clay-outer: 8px 12px 24px rgba(125, 130, 175, 0.28), -6px -6px 16px rgba(255, 255, 255, 0.9);
+  --clay-inner: inset 2.5px 2.5px 4px rgba(255, 255, 255, 0.95), inset -3px -3px 6px rgba(135, 140, 180, 0.22);
+  --clay-btn-outer: 5px 7px 16px rgba(125, 130, 175, 0.3), -4px -4px 12px rgba(255, 255, 255, 0.95);
+  --clay-btn-pressed: inset 3.5px 3.5px 7px rgba(110, 115, 160, 0.35), inset -2.5px -2.5px 5px rgba(255, 255, 255, 0.85);
+  --clay-border: rgba(255, 255, 255, 0.9);
+}
+.dark {
+  --text-main: #f4f3fa;
+  --clay-base: #181926;
+  --clay-butter: #3a3518;
+  --clay-lavender: #23223d;
+  --clay-mint: #162b24;
+  --clay-peach: #361f1b;
+  --clay-sky: #17243b;
+  --clay-rose: #331a28;
+  --clay-outer: 10px 14px 28px rgba(0, 0, 0, 0.75), -5px -5px 16px rgba(45, 47, 72, 0.35);
+  --clay-inner: inset 2px 2px 4px rgba(75, 80, 120, 0.4), inset -3px -3px 6px rgba(0, 0, 0, 0.7);
+  --clay-btn-outer: 6px 8px 18px rgba(0, 0, 0, 0.7), -3px -3px 10px rgba(45, 47, 72, 0.3);
+  --clay-btn-pressed: inset 4px 4px 8px rgba(0, 0, 0, 0.8), inset -2px -2px 4px rgba(60, 65, 100, 0.4);
+  --clay-border: rgba(255, 255, 255, 0.08);
+}
 .clay-card {
   background-color: var(--clay-base);
   box-shadow: var(--clay-outer), var(--clay-inner);
   border: 2px solid var(--clay-border);
   border-radius: 26px;
 }
-
-/* Distinct Pastel Component Colors */
-.clay-butter {
-  background-color: var(--clay-butter) !important;
+.clay-butter, .clay-lavender, .clay-mint, .clay-peach, .clay-sky, .clay-rose {
   box-shadow: var(--clay-outer), var(--clay-inner);
   border: 2px solid var(--clay-border);
   border-radius: 26px;
-  color: #382A00;
 }
-.dark .clay-butter {
-  color: #FFEE8C !important;
-}
-
-.clay-lavender {
-  background-color: var(--clay-lavender) !important;
-  box-shadow: var(--clay-outer), var(--clay-inner);
-  border: 2px solid var(--clay-border);
-  border-radius: 26px;
-  color: #27225A;
-}
-.dark .clay-lavender {
-  color: #E2DDFF !important;
-}
-
-.clay-mint {
-  background-color: var(--clay-mint) !important;
-  box-shadow: var(--clay-outer), var(--clay-inner);
-  border: 2px solid var(--clay-border);
-  border-radius: 26px;
-  color: #0E3B27;
-}
-.dark .clay-mint {
-  color: #BAF2D8 !important;
-}
-
-.clay-peach {
-  background-color: var(--clay-peach) !important;
-  box-shadow: var(--clay-outer), var(--clay-inner);
-  border: 2px solid var(--clay-border);
-  border-radius: 26px;
-  color: #4C2114;
-}
-.dark .clay-peach {
-  color: #FFD2C1 !important;
-}
-
-.clay-sky {
-  background-color: var(--clay-sky) !important;
-  box-shadow: var(--clay-outer), var(--clay-inner);
-  border: 2px solid var(--clay-border);
-  border-radius: 26px;
-  color: #12335E;
-}
-.dark .clay-sky {
-  color: #CBE4FE !important;
-}
-
-.clay-rose {
-  background-color: var(--clay-rose) !important;
-  box-shadow: var(--clay-outer), var(--clay-inner);
-  border: 2px solid var(--clay-border);
-  border-radius: 26px;
-  color: #4A172A;
-}
-.dark .clay-rose {
-  color: #FEDCE8 !important;
-}
-
-/* Clay Button */
+.clay-butter { background-color: var(--clay-butter) !important; color: #382a00; }
+.dark .clay-butter { color: #ffee8c !important; }
+.clay-lavender { background-color: var(--clay-lavender) !important; color: #27225a; }
+.dark .clay-lavender { color: #e2ddff !important; }
+.clay-mint { background-color: var(--clay-mint) !important; color: #0e3b27; }
+.dark .clay-mint { color: #baf2d8 !important; }
+.clay-peach { background-color: var(--clay-peach) !important; color: #4c2114; }
+.dark .clay-peach { color: #ffd2c1 !important; }
+.clay-sky { background-color: var(--clay-sky) !important; color: #12335e; }
+.dark .clay-sky { color: #cbe4fe !important; }
+.clay-rose { background-color: var(--clay-rose) !important; color: #4a172a; }
+.dark .clay-rose { color: #fedce8 !important; }
 .clay-btn {
   background-color: var(--clay-base);
   box-shadow: var(--clay-btn-outer), var(--clay-inner);
   border: 2px solid var(--clay-border);
   border-radius: 18px;
   color: var(--text-main);
-  transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
   cursor: pointer;
 }
-
-.clay-btn:hover {
-  transform: translateY(-2px);
-  filter: brightness(1.02);
-}
-
-.clay-btn:active, .clay-btn-pressed {
-  box-shadow: var(--clay-btn-pressed) !important;
-  transform: translateY(1.5px) scale(0.98);
-}
-
-/* Prominent Accent Action Button */
+.clay-btn:active { box-shadow: var(--clay-btn-pressed) !important; }
 .clay-btn-accent {
-  background: linear-gradient(135deg, #7A64F8, #5E46F2) !important;
-  color: #FFFFFF !important;
+  background: linear-gradient(135deg, #7a64f8, #5e46f2) !important;
+  color: #ffffff !important;
   box-shadow: 6px 9px 20px rgba(94, 70, 242, 0.45), inset 2px 2px 4px rgba(255, 255, 255, 0.45);
   border: 2px solid rgba(255, 255, 255, 0.4);
 }
-
-.clay-btn-accent:hover {
-  background: linear-gradient(135deg, #8772FC, #6B54F5) !important;
-}
-
-.clay-btn-accent:active {
-  box-shadow: inset 4px 4px 8px rgba(40, 25, 140, 0.5), inset -2px -2px 4px rgba(255, 255, 255, 0.3) !important;
-}
-
-/* Butter Yellow Accent Button (Matching #FFEE8C) */
-.clay-btn-butter {
-  background-color: #FFEE8C !important;
-  color: #382A00 !important;
-  box-shadow: 5px 8px 18px rgba(195, 175, 75, 0.35), inset 2px 2px 4px rgba(255, 255, 255, 0.85);
-  border: 2px solid #FFF7BE;
-}
-.dark .clay-btn-butter {
-  background-color: #D6C252 !important;
-  color: #1F1900 !important;
-  box-shadow: 5px 8px 18px rgba(0, 0, 0, 0.5), inset 2px 2px 4px rgba(255, 255, 255, 0.5);
-  border: 2px solid rgba(255, 240, 150, 0.4);
-}
-
-/* Inset Clay Input */
 .clay-input {
   background-color: var(--clay-base) !important;
   box-shadow: inset 3px 3px 6px rgba(120, 125, 165, 0.28), inset -2.5px -2.5px 5px rgba(255, 255, 255, 0.95);
@@ -197,37 +312,4 @@ body {
 }
 .dark .clay-input {
   box-shadow: inset 3px 3px 6px rgba(0, 0, 0, 0.7), inset -2px -2px 4px rgba(45, 47, 72, 0.35);
-}
-
-/* Clay Sliders */
-input[type="range"] {
-  -webkit-appearance: none;
-  background: transparent;
-}
-
-input[type="range"]::-webkit-slider-runnable-track {
-  height: 12px;
-  border-radius: 999px;
-  background-color: rgba(140, 145, 185, 0.25);
-  box-shadow: inset 2px 2px 4px rgba(0, 0, 0, 0.2), inset -1px -1px 3px rgba(255, 255, 255, 0.6);
-}
-.dark input[type="range"]::-webkit-slider-runnable-track {
-  background-color: rgba(0, 0, 0, 0.5);
-  box-shadow: inset 2px 2px 4px rgba(0, 0, 0, 0.8);
-}
-
-input[type="range"]::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  height: 24px;
-  width: 24px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #FFEE8C, #F4DA5A);
-  box-shadow: 3px 4px 10px rgba(160, 140, 40, 0.4), inset 2px 2px 4px rgba(255, 255, 255, 0.9);
-  border: 2.5px solid #FFFFFF;
-  cursor: pointer;
-  margin-top: -6px;
-  transition: transform 0.15s ease;
-}
-input[type="range"]::-webkit-slider-thumb:hover {
-  transform: scale(1.15);
 }

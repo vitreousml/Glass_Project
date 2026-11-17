@@ -7,7 +7,7 @@ Protected with strict Firebase Authentication token verification.
 from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Literal, Optional, Any
 from datetime import datetime
 
 import app.ml_adapter as ml_adapter
@@ -32,12 +32,22 @@ class CompositionInput(BaseModel):
     composition: Dict[str, float] = Field(
         ...,
         example={"SiO2": 60.0, "B2O3": 20.0, "Na2O": 20.0},
-        description="Oxide mole percentages summing to 100 mol %"
+        description="Oxide percentages summing to 100, in the unit given by composition_basis"
+    )
+    composition_basis: Literal["mol", "wt"] = Field(
+        "mol",
+        example="mol",
+        description="'mol' for mol % or 'wt' for weight %. Weight % is converted to mol % before predicting."
     )
     model_name: Optional[str] = Field(
         None,
         example="RF",
         description="One of the 4 models: RF, XGB, KNN, SVM. If omitted/null, returns predictions from all 4."
+    )
+    properties: List[str] = Field(
+        default_factory=lambda: ["Tg"],
+        example=["Tg"],
+        description="Properties to predict. Only properties with a trained model are accepted."
     )
 
 class ZenDiscoverInput(BaseModel):
@@ -166,33 +176,64 @@ def predict_glass(
     user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
-    Predict Tg (in Kelvin) for given glass composition (in mol %).
+    Predict the chosen properties for a glass composition given in mol % or weight %.
+    Weight % is converted to mol % here, because the models were trained on mol %.
+    Every value is returned in Kelvin (K).
     Requires authenticated user (Firebase ID Token).
     Does NOT record individual user prediction history to Firestore.
     """
     comp = data.composition
+
+    unknown = [ox for ox in comp if ox not in ml_adapter.SUPPORTED_OXIDES]
+    if unknown:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported oxides: {unknown}. Supported: {ml_adapter.SUPPORTED_OXIDES}"
+        )
+    if any(v < 0 for v in comp.values()):
+        raise HTTPException(status_code=400, detail="Oxide amounts cannot be negative.")
+    if sum(comp.values()) <= 0:
+        raise HTTPException(status_code=400, detail="Composition must contain at least one oxide above 0.")
+
+    if not data.properties:
+        raise HTTPException(status_code=400, detail="Choose at least one property to predict.")
+    no_model = [p for p in data.properties if p not in ml_adapter.PROPERTIES]
+    if no_model:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No trained model yet for: {no_model}. Available: {list(ml_adapter.PROPERTIES)}"
+        )
+
+    if data.model_name and data.model_name not in ml_adapter.MODELS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid model '{data.model_name}'. Choose from: {ml_adapter.MODELS}"
+        )
+    models = [data.model_name] if data.model_name else ml_adapter.MODELS
+
+    if data.composition_basis == "wt":
+        comp_mol = ml_adapter.wt_to_mol_percent(comp)
+    else:
+        comp_mol = dict(comp)
+    # Report every oxide the models use, so the user sees exactly what was evaluated.
+    comp_mol = {ox: float(comp_mol.get(ox, 0.0)) for ox in ml_adapter.SUPPORTED_OXIDES}
+
     try:
-        if data.model_name:
-            if data.model_name not in ml_adapter.MODELS:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Invalid model '{data.model_name}'. Choose from: {ml_adapter.MODELS}"
-                )
-            result = ml_adapter.predict_single_model(comp, data.model_name)
-            return {
-                "results": [result],
-                "selected_model": data.model_name,
-                "authenticated_user": user.get("email")
-            }
-        else:
-            results = ml_adapter.predict_all_models(comp)
-            return {
-                "results": results,
-                "selected_model": "ALL",
-                "authenticated_user": user.get("email")
-            }
+        results = [
+            ml_adapter.PREDICTORS[prop](comp_mol, m)
+            for prop in data.properties
+            for m in models
+        ]
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+    return {
+        "results": results,
+        "selected_model": data.model_name or "ALL",
+        "input_basis": "wt %" if data.composition_basis == "wt" else "mol %",
+        "composition_mol_percent": {ox: round(v, 4) for ox, v in comp_mol.items()},
+        "authenticated_user": user.get("email")
+    }
 
 @app.post("/api/v1/zen/discover")
 def discover_compositions(

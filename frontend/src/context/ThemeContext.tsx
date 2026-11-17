@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useCallback, useContext, useSyncExternalStore } from "react";
 
 type Theme = "light" | "dark";
 
@@ -9,43 +9,46 @@ interface ThemeContextType {
   toggleTheme: () => void;
 }
 
+const STORAGE_KEY = "glass_platform_theme";
+
 const ThemeContext = createContext<ThemeContextType>({
   theme: "light",
   toggleTheme: () => {},
 });
 
-export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
-  const [theme, setTheme] = useState<Theme>("light");
-  const [mounted, setMounted] = useState(false);
+// The theme lives on <html class="dark">, set before paint by the script in layout.tsx.
+// This store just reads it, so React never disagrees with what is on screen.
+function subscribe(onChange: () => void) {
+  const observer = new MutationObserver(onChange);
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+  return () => observer.disconnect();
+}
+const getSnapshot = (): Theme => (document.documentElement.classList.contains("dark") ? "dark" : "light");
+const getServerSnapshot = (): Theme => "light";
 
-  useEffect(() => {
-    const saved = localStorage.getItem("glass_platform_theme") as Theme | null;
-    const initialTheme: Theme = saved === "dark" ? "dark" : "light";
-    setTheme(initialTheme);
-    if (initialTheme === "dark") {
-      document.documentElement.classList.add("dark");
+export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
+  const theme = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+
+  const toggleTheme = useCallback(() => {
+    const next: Theme = getSnapshot() === "dark" ? "light" : "dark";
+    const apply = () => {
+      document.documentElement.classList.toggle("dark", next === "dark");
+      try {
+        localStorage.setItem(STORAGE_KEY, next);
+      } catch {
+        // Storage can be blocked; the theme still switches for this visit.
+      }
+    };
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    // Crossfade the whole page where the browser supports view transitions.
+    if (!reduce && typeof document.startViewTransition === "function") {
+      document.startViewTransition(apply);
     } else {
-      document.documentElement.classList.remove("dark");
+      apply();
     }
-    setMounted(true);
   }, []);
 
-  const toggleTheme = () => {
-    const nextTheme: Theme = theme === "light" ? "dark" : "light";
-    setTheme(nextTheme);
-    localStorage.setItem("glass_platform_theme", nextTheme);
-    if (nextTheme === "dark") {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
-  };
-
-  return (
-    <ThemeContext.Provider value={{ theme, toggleTheme }}>
-      {children}
-    </ThemeContext.Provider>
-  );
+  return <ThemeContext.Provider value={{ theme, toggleTheme }}>{children}</ThemeContext.Provider>;
 };
 
 export const useTheme = () => useContext(ThemeContext);
