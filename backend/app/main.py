@@ -11,6 +11,7 @@ from typing import Dict, List, Literal, Optional, Any
 from datetime import datetime
 
 import app.ml_adapter as ml_adapter
+import app.project_service as project_service
 from app.firebase_auth import init_firebase, get_firestore_db, get_current_user
 
 app = FastAPI(
@@ -29,6 +30,11 @@ app.add_middleware(
 )
 
 class CompositionInput(BaseModel):
+    project_id: Optional[str] = Field(
+        None,
+        example="proj_a1b2c3d4",
+        description="Project ID under which this prediction will be saved. Required before predicting."
+    )
     composition: Dict[str, float] = Field(
         ...,
         example={"SiO2": 60.0, "B2O3": 20.0, "Na2O": 20.0},
@@ -49,6 +55,11 @@ class CompositionInput(BaseModel):
         example=["Tg"],
         description="Properties to predict. Only properties with a trained model are accepted."
     )
+
+class ProjectCreateInput(BaseModel):
+    name: str = Field(..., example="Sodium Borosilicate High-Tg Study", description="Unique name for the project")
+    description: Optional[str] = Field("", example="Research on thermal stability in nuclear waste glasses", description="Project description or notes")
+
 
 class ZenDiscoverInput(BaseModel):
     target_tg: float = Field(..., example=800.0, description="Target Tg in Kelvin")
@@ -230,6 +241,61 @@ def save_profile(data: ProfileDetails, user: Dict[str, Any] = Depends(get_curren
     get_firestore_db().collection("users").document(user["uid"]).set(record, merge=True)
     return _profile_view(record)
 
+# -------------------------------------------------------------
+# Project Management Endpoints (User -> Projects -> Predictions)
+# -------------------------------------------------------------
+
+@app.get("/api/v1/projects")
+def list_user_projects(user: Dict[str, Any] = Depends(get_current_user)):
+    """
+    List all projects belonging to the authenticated user.
+    Ordered by last updated date descending.
+    """
+    uid = user.get("uid")
+    return {
+        "projects": project_service.list_projects(uid),
+        "total": len(project_service.list_projects(uid))
+    }
+
+@app.post("/api/v1/projects")
+def create_user_project(
+    data: ProjectCreateInput,
+    user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Create a new project container.
+    Requires a unique project name per user.
+    """
+    uid = user.get("uid")
+    project = project_service.create_project(
+        user_id=uid,
+        name=data.name,
+        description=data.description
+    )
+    return project
+
+@app.get("/api/v1/projects/{project_id}")
+def get_user_project_details(
+    project_id: str,
+    user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Retrieve project details along with all prediction records made under it.
+    """
+    uid = user.get("uid")
+    return project_service.get_project_with_predictions(user_id=uid, project_id=project_id)
+
+@app.delete("/api/v1/projects/{project_id}")
+def delete_user_project(
+    project_id: str,
+    user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Delete a project and cascade-delete all predictions associated with it.
+    """
+    uid = user.get("uid")
+    return project_service.delete_project(user_id=uid, project_id=project_id)
+
 @app.post("/api/v1/predict")
 def predict_glass(
     data: CompositionInput,
@@ -239,9 +305,24 @@ def predict_glass(
     Predict the chosen properties for a glass composition given in mol % or weight %.
     Weight % is converted to mol % here, because the models were trained on mol %.
     Every value is returned in Kelvin (K).
-    Requires authenticated user (Firebase ID Token).
-    Does NOT record individual user prediction history to Firestore.
+    Requires authenticated user (Firebase ID Token) and a valid selected project_id.
+    Saves the prediction under the selected project.
     """
+    uid = user.get("uid")
+    if not data.project_id:
+        raise HTTPException(
+            status_code=400,
+            detail="A project must be created and selected before performing a prediction. Please provide project_id."
+        )
+
+    # Verify project exists and belongs to user
+    project = project_service.get_project(uid, data.project_id)
+    if not project:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Project '{data.project_id}' not found or not owned by you. Please select a valid project."
+        )
+
     comp = data.composition
 
     unknown = [ox for ox in comp if ox not in ml_adapter.SUPPORTED_OXIDES]
@@ -287,12 +368,30 @@ def predict_glass(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+    clean_mol = {ox: round(v, 4) for ox, v in comp_mol.items()}
+
+    # Save prediction under the selected project
+    saved_record = project_service.save_prediction_under_project(
+        user_id=uid,
+        project_id=data.project_id,
+        composition=comp,
+        composition_basis=data.composition_basis,
+        composition_mol_percent=clean_mol,
+        selected_model=data.model_name or "ALL",
+        properties=data.properties,
+        results=results
+    )
+
     return {
         "results": results,
         "selected_model": data.model_name or "ALL",
         "input_basis": "wt %" if data.composition_basis == "wt" else "mol %",
-        "composition_mol_percent": {ox: round(v, 4) for ox, v in comp_mol.items()},
-        "authenticated_user": user.get("email")
+        "composition_mol_percent": clean_mol,
+        "authenticated_user": user.get("email"),
+        "project_id": data.project_id,
+        "project_name": project.get("name"),
+        "prediction_id": saved_record.get("id"),
+        "created_at": saved_record.get("createdAt")
     }
 
 @app.post("/api/v1/zen/discover")

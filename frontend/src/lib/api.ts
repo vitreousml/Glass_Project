@@ -53,8 +53,62 @@ export const saveProfile = (details: ProfileDetails, token: string | null): Prom
 // "mol" = mol %, "wt" = weight %. The backend converts weight % to mol % itself.
 export type CompositionBasis = "mol" | "wt";
 
+export interface Project {
+  id: string;
+  userId: string;
+  name: string;
+  description: string;
+  status: string;
+  predictionCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PredictionRecord {
+  id: string;
+  projectId: string;
+  projectName: string;
+  userId: string;
+  composition: Record<string, number>;
+  compositionBasis: CompositionBasis;
+  compositionMolPercent: Record<string, number>;
+  selectedModel: string;
+  properties: string[];
+  results: {
+    property: string;
+    model: string;
+    value: number; // Kelvin
+    unit: string;
+    warnings: string[];
+  }[];
+  createdAt: string;
+}
+
+export interface ProjectDetails {
+  project: Project;
+  predictions: PredictionRecord[];
+}
+
+// Project APIs
+export const listProjects = (token?: string | null): Promise<{ projects: Project[]; total: number }> =>
+  call("/api/v1/projects", { method: "GET" }, token);
+
+export const createProject = (name: string, description: string = "", token?: string | null): Promise<Project> =>
+  call("/api/v1/projects", {
+    method: "POST",
+    body: JSON.stringify({ name, description }),
+  }, token);
+
+export const getProjectDetails = (projectId: string, token?: string | null): Promise<ProjectDetails> =>
+  call(`/api/v1/projects/${projectId}`, { method: "GET" }, token);
+
+export const deleteProject = (projectId: string, token?: string | null): Promise<{ success: boolean; deletedProjectId: string; deletedPredictionsCount: number; message: string }> =>
+  call(`/api/v1/projects/${projectId}`, { method: "DELETE" }, token);
+
 // Returns every value in Kelvin; the page converts to °C for display.
+// Mandatorily associated with a project.
 export const predictProperties = (
+  projectId: string,
   composition: Record<string, number>,
   basis: CompositionBasis,
   model: string,
@@ -63,8 +117,8 @@ export const predictProperties = (
 ) =>
   call("/api/v1/predict", {
     method: "POST",
-    // The page uses "ALL" for "every model"; the backend wants no model name for that.
     body: JSON.stringify({
+      project_id: projectId,
       composition,
       composition_basis: basis,
       model_name: model === "ALL" ? null : model,

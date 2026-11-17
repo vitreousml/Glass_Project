@@ -3,6 +3,7 @@ import { IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
 import { ThemeProvider } from "@/context/ThemeContext";
+import { ProjectProvider } from "@/context/ProjectContext";
 
 const sans = IBM_Plex_Sans({
   subsets: ["latin"],
@@ -39,7 +40,9 @@ export default function RootLayout({
       </head>
       <body className="antialiased selection:bg-heat-4 selection:text-ink">
         <ThemeProvider>
-          <AuthProvider>{children}</AuthProvider>
+          <AuthProvider>
+            <ProjectProvider>{children}</ProjectProvider>
+          </AuthProvider>
         </ThemeProvider>
       </body>
     </html>

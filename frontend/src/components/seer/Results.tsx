@@ -25,6 +25,10 @@ export interface PredictResponse {
   results: PredictResult[];
   input_basis: string;
   composition_mol_percent: Record<string, number>;
+  project_id?: string;
+  project_name?: string;
+  prediction_id?: string;
+  created_at?: string;
 }
 
 const tgOf = (g: PredictedGlass) => g.response.results.filter((r) => r.property === "Tg" && r.unit === "K");
@@ -101,6 +105,26 @@ export function Results({
           <SingleResult glass={glasses[0]} oxides={oxides} rangeC={rangeC} />
         )}
       </div>
+
+      {glasses[0]?.response?.project_name && (
+        <div className="flex items-center justify-between gap-3 p-3 rounded-xl border border-line bg-surface-2/60 text-xs">
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-ink-3">Saved to project:</span>
+            <span className="font-bold text-ink">{glasses[0].response.project_name}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() =>
+              window.dispatchEvent(
+                new CustomEvent("navigate-screen", { detail: "profile" })
+              )
+            }
+            className="text-xs font-bold text-ink hover:underline shrink-0"
+          >
+            View in My Projects →
+          </button>
+        </div>
+      )}
 
       <AnimatePresence initial={false}>
         {warnings.map((w) => (

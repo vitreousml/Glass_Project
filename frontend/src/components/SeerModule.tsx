@@ -20,6 +20,7 @@ import {
 import { DURATION, EASE_IN, SPRING, T } from "@/lib/motion";
 import { kToC } from "@/lib/units";
 import { useAuth } from "@/context/AuthContext";
+import { useProject } from "@/context/ProjectContext";
 import { Button } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Dialog";
 import { Drawer } from "@/components/ui/Drawer";
@@ -31,6 +32,8 @@ import { Results, type PredictResponse } from "@/components/seer/Results";
 import { MultiCompositionStep, MAX_ROWS, rowValid, type CompositionRow } from "@/components/seer/MultiCompositionStep";
 import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
 import type { PredictedGlass } from "@/components/seer/report";
+import { ProjectBanner } from "@/components/seer/ProjectBanner";
+import { ProjectModal } from "@/components/seer/ProjectModal";
 
 const ELEMENT_BY_SYMBOL = Object.fromEntries(PERIODIC_ELEMENTS.map((e) => [e.symbol, e]));
 
@@ -80,6 +83,8 @@ const stepVariants = {
 
 export default function SeerModule() {
   const { token } = useAuth();
+  const { activeProject, refreshActiveProject } = useProject();
+  const [projectModalOpen, setProjectModalOpen] = useState(false);
 
   const [selected, setSelected] = useState<string[]>([]); // element symbols, in click order
   const [excluded, setExcluded] = useState<string[]>([]);
@@ -294,6 +299,12 @@ export default function SeerModule() {
     );
 
   const predict = async () => {
+    if (!activeProject) {
+      setError("A project must be created and selected before performing a prediction.");
+      setProjectModalOpen(true);
+      return;
+    }
+
     setError(null);
     if (formers.length === 0) {
       setError(NOT_A_GLASS);
@@ -312,10 +323,11 @@ export default function SeerModule() {
         Object.fromEntries(activeOxides.map((ox) => [ox, Number((c[ox] ?? 0).toFixed(4))])),
       );
       const responses: PredictResponse[] = await Promise.all(
-        comps.map((c) => predictProperties(c, basis, model, properties, token)),
+        comps.map((c) => predictProperties(activeProject.id, c, basis, model, properties, token)),
       );
       setGlasses(comps.map((c, i) => ({ composition: c, response: responses[i] })));
       setResultKey(key);
+      await refreshActiveProject();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't reach the prediction server.");
     } finally {
@@ -338,6 +350,8 @@ export default function SeerModule() {
           <Legend swatch="pt-off" label="No data yet" />
         </ul>
       </header>
+
+      <ProjectBanner className="mb-3 shrink-0" />
 
       <div className="min-h-[300px] flex-1 md:min-h-0">
         <PeriodicTable selected={selected} onToggle={toggleElement} />
@@ -447,6 +461,7 @@ export default function SeerModule() {
                 />
               ) : (
                 <>
+                  <ProjectBanner className="mb-2" />
                   <SegmentedToggle
                     id="mode-drawer"
                     label="How many compositions"
@@ -548,9 +563,11 @@ export default function SeerModule() {
                 className="flex-1 overflow-hidden"
                 disabled={loading || !canPredict}
                 aria-busy={loading}
-                onClick={predict}
+                onClick={activeProject ? predict : () => setProjectModalOpen(true)}
               >
-                {loading
+                {!activeProject
+                  ? "Select Project to Predict"
+                  : loading
                   ? "Predicting…"
                   : `Predict${mode === "multiple" ? ` ${rows.length} glass${rows.length === 1 ? "" : "es"}` : ""}${
                       model === "ALL" ? " with all four" : ` with ${model}`
@@ -620,6 +637,8 @@ export default function SeerModule() {
           );
         })()}
       </Dialog>
+
+      <ProjectModal open={projectModalOpen} onClose={() => setProjectModalOpen(false)} />
     </div>
   );
 }
