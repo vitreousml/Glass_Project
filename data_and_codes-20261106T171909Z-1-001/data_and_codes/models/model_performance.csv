@@ -1,0 +1,5 @@
+Target,Model,MAE,RMSE,R2,Best Parameters
+Tg,RF,14.8478,21.7765,0.8782,"{'bootstrap': True, 'max_depth': 10, 'n_estimators': 100}"
+Tg,XGB,15.7509,22.2425,0.873,"{'learning_rate': 0.1, 'n_estimators': 50}"
+Tg,SVM,22.3746,28.9437,0.7849,"{'C': 10, 'kernel': 'rbf'}"
+Tg,KNN,17.8211,24.9827,0.8398,"{'n_neighbors': 7, 'weights': 'distance'}"
