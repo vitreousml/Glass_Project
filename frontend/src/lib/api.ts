@@ -20,6 +20,25 @@ async function call(path: string, init: { method?: string; body?: string } = {},
 
 export const getBankSummary = () => call("/api/v1/bank/summary");
 
+export interface BankQueryResult {
+  oxides: string[];
+  properties: string[];
+  total: number;
+  rows: Record<string, number | null>[];
+  unit_info: Record<string, string>;
+  composition_basis: string;
+}
+
+export const queryBankData = (
+  oxides: string[],
+  properties: string[],
+  token?: string | null,
+): Promise<BankQueryResult> =>
+  call("/api/v1/bank/query", {
+    method: "POST",
+    body: JSON.stringify({ oxides, properties }),
+  }, token);
+
 // Tells the backend "this person just signed in": it saves their name and email.
 export const recordLogin = (token: string | null) => call("/api/v1/auth/me", {}, token);
 

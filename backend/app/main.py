@@ -66,6 +66,18 @@ class ZenDiscoverInput(BaseModel):
     tolerance: float = Field(default=25.0, example=20.0, description="Tolerance band (+/- K)")
     model_name: str = Field(default="RF", example="RF", description="Model to use for screening")
 
+class BankQueryInput(BaseModel):
+    oxides: List[str] = Field(
+        ...,
+        example=["SiO2", "B2O3", "Na2O"],
+        description="Oxide columns to include (1-5). Must be from SiO2, B2O3, Na2O."
+    )
+    properties: List[str] = Field(
+        ...,
+        example=["Tg"],
+        description="Properties to include (1-2). Currently only 'Tg' is available."
+    )
+
 class ProfileDetails(BaseModel):
     """What a new account is asked once, right after first sign-in."""
     university: str = Field(..., max_length=120, example="Thapar Institute of Engineering and Technology",
@@ -141,6 +153,47 @@ def get_bank_summary():
             "Tg": {"min": 496.15, "max": 998.15, "unit": "K"}
         },
         "models_available": ml_adapter.MODELS
+    }
+
+@app.post("/api/v1/bank/query")
+def query_bank_data(
+    data: BankQueryInput,
+    user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Query the training dataset. Returns matching rows with the requested
+    oxide compositions and properties. Rows that have data for at least one
+    of the requested properties are included (OR logic, not AND).
+    Authenticated endpoint — requires a valid Firebase Bearer token.
+    """
+    # Validate oxides (up to 5 oxides)
+    if len(data.oxides) < 1 or len(data.oxides) > 5:
+        raise HTTPException(status_code=400, detail="Select between 1 and 5 oxides.")
+    invalid_ox = [ox for ox in data.oxides if ox not in ml_adapter.ALL_BANK_OXIDES]
+    if invalid_ox:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid oxide(s): {invalid_ox}. Allowed: {ml_adapter.ALL_BANK_OXIDES}"
+        )
+
+    # Validate properties (up to 2 properties)
+    if len(data.properties) < 1 or len(data.properties) > 2:
+        raise HTTPException(status_code=400, detail="Select between 1 and 2 properties.")
+    invalid_prop = [p for p in data.properties if p not in ml_adapter.ALL_BANK_PROPERTIES]
+    if invalid_prop:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid property/ies: {invalid_prop}. Available: {list(ml_adapter.ALL_BANK_PROPERTIES.keys())}"
+        )
+
+    rows = ml_adapter.query_bank(data.oxides, data.properties)
+    return {
+        "oxides": data.oxides,
+        "properties": data.properties,
+        "total": len(rows),
+        "rows": rows,
+        "unit_info": {p: ml_adapter.ALL_BANK_PROPERTIES.get(p, p) for p in data.properties},
+        "composition_basis": "mol %",
     }
 
 # -------------------------------------------------------------

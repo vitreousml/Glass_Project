@@ -139,3 +139,91 @@ PREDICTORS = {
     "Tg": predict_single_model,
 }
 
+# ---------------------------------------------------------------------------
+# Bank data-query helpers
+# ---------------------------------------------------------------------------
+import csv
+
+# Oxides known across the platform (models + glass formers)
+ALL_BANK_OXIDES = ["SiO2", "B2O3", "Na2O", "Al2O3", "P2O5", "GeO2", "As2O3", "V2O5"]
+# Columns actually present in the training dataset CSV
+DATASET_OXIDE_COLS = ["SiO2", "B2O3", "Na2O"]
+
+# All candidate properties
+ALL_BANK_PROPERTIES = {
+    "Tg": "Glass transition temperature (K)",
+    "density": "Density (g/cm³)",
+    "refractive_index": "Refractive index",
+    "youngs_modulus": "Young's modulus (GPa)",
+    "cte": "Thermal expansion coefficient (10⁻⁶/K)",
+}
+# Properties actually measured in this CSV
+DATASET_PROPERTY_COLS = {"Tg": "Tg"}
+
+def _load_bank_csv() -> list[dict]:
+    """Load glass_data.csv rows, returning user-facing columns."""
+    path = os.path.join(ML_DIR, "glass_data.csv")
+    rows: list[dict] = []
+    with open(path, newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for rec in reader:
+            row: dict = {}
+            for ox in ALL_BANK_OXIDES:
+                if ox in DATASET_OXIDE_COLS:
+                    try:
+                        row[ox] = float(rec[ox])
+                    except (KeyError, ValueError):
+                        row[ox] = 0.0
+                else:
+                    row[ox] = 0.0
+            for prop_id in ALL_BANK_PROPERTIES:
+                if prop_id in DATASET_PROPERTY_COLS:
+                    col_name = DATASET_PROPERTY_COLS[prop_id]
+                    try:
+                        val = float(rec[col_name])
+                        row[prop_id] = val
+                    except (KeyError, ValueError):
+                        row[prop_id] = None
+                else:
+                    row[prop_id] = None
+            rows.append(row)
+    return rows
+
+# Cache once at import time — the CSV never changes at runtime.
+_BANK_DATA: list[dict] | None = None
+
+def get_bank_data() -> list[dict]:
+    global _BANK_DATA
+    if _BANK_DATA is None:
+        _BANK_DATA = _load_bank_csv()
+    return _BANK_DATA
+
+def query_bank(
+    oxides: list[str],
+    properties: list[str],
+) -> list[dict]:
+    """
+    Return rows from the training dataset matching the selected oxides and properties.
+    Requirement: if data for any ONE property is present, the row is returned.
+    If none of the selected oxides exist in the dataset, returns empty list.
+    """
+    # Check if at least one selected oxide exists in the dataset
+    dataset_has_any_oxide = any(ox in DATASET_OXIDE_COLS for ox in oxides)
+    if not dataset_has_any_oxide:
+        return []
+
+    all_rows = get_bank_data()
+    out: list[dict] = []
+    for row in all_rows:
+        # A row matches if at least one requested property has data (non-null)
+        has_any_prop = any(row.get(p) is not None for p in properties)
+        if not has_any_prop:
+            continue
+        entry: dict = {}
+        for ox in oxides:
+            entry[ox] = row.get(ox, 0.0)
+        for p in properties:
+            entry[p] = row.get(p)  # float or None
+        out.append(entry)
+    return out
+
