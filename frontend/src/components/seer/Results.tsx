@@ -1,8 +1,8 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { AlertTriangle, Download, Printer } from "lucide-react";
+import { AlertTriangle, Download, Printer, HeartHandshake, X } from "lucide-react";
 import type { CompositionBasis } from "@/lib/api";
 import { MODEL_BY_ID, basisLabel, formula, relevantWarnings } from "@/lib/chem";
 import { downloadCsv, printReport } from "@/lib/export";
@@ -58,6 +58,17 @@ export function Results({
   if (glasses.length === 0) return null;
   const report = () => buildReport(glasses, oxides, basis);
   const allModels = tgOf(glasses[0]).length > 1;
+  const [showAckToast, setShowAckToast] = useState(false);
+
+  const handleCsvDownload = () => {
+    downloadCsv(report());
+    setShowAckToast(true);
+  };
+
+  const handlePrint = () => {
+    printReport(report());
+    setShowAckToast(true);
+  };
 
   const warnings = glasses.flatMap((g, i) =>
     relevantWarnings(
@@ -74,16 +85,40 @@ export function Results({
           {allModels && <span className="font-normal text-ink-2"> · all four models</span>}
         </h3>
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="sm" onClick={() => downloadCsv(report())} disabled={stale}>
+          <Button variant="ghost" size="sm" onClick={handleCsvDownload} disabled={stale}>
             <Download className="h-3.5 w-3.5" aria-hidden />
             CSV
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => printReport(report())} disabled={stale}>
+          <Button variant="ghost" size="sm" onClick={handlePrint} disabled={stale}>
             <Printer className="h-3.5 w-3.5" aria-hidden />
             Print
           </Button>
         </div>
       </div>
+
+      <AnimatePresence>
+        {showAckToast && (
+          <motion.div
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            className="flex items-start gap-2.5 rounded-md border border-line bg-surface-2 p-3 text-xs text-ink-2"
+          >
+            <HeartHandshake className="h-4 w-4 shrink-0 text-ink mt-0.5" />
+            <div className="flex-1">
+              <span className="font-semibold text-ink">Thank you for predicting with Glass Studio!</span> If you use these predictions in your research or publication, please cite/acknowledge: <span className="font-medium text-ink">Glass Studio · COE-DSAI, TIET Patiala</span>.
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowAckToast(false)}
+              className="text-ink-3 hover:text-ink transition-colors ml-1"
+              aria-label="Dismiss notice"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {stale && (
@@ -205,23 +240,39 @@ function MultiTable({ glasses, oxides, basis }: { glasses: PredictedGlass[]; oxi
   const models = tgOf(glasses[0]).map((r) => r.model);
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="text-xs text-ink-3">
-            <th className="py-1.5 pr-2 text-left font-normal">#</th>
-            {oxides.map((ox) => (
-              <th key={ox} className="px-2 py-1.5 text-right font-normal">
-                {formula(ox)}
-              </th>
-            ))}
-            {models.map((m) => (
-              <th key={m} className="py-1.5 pl-3 text-right font-medium text-ink-2">
-                {models.length > 1 ? m : <Tg />}, °C
-              </th>
-            ))}
-          </tr>
-        </thead>
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-2 flex-wrap text-xs">
+        <div className="flex items-center gap-1.5">
+          <span className="text-ink-3">Input composition basis:</span>
+          <span className="rounded-sm bg-surface-2 px-1.5 py-0.5 font-semibold text-ink border border-line">
+            {basisLabel(basis)}
+          </span>
+        </div>
+        {basis === "wt" && (
+          <span className="text-[11px] text-ink-3">
+            (ML predictions calculated from converted mol % values)
+          </span>
+        )}
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-xs text-ink-3">
+              <th className="py-1.5 pr-2 text-left font-normal">#</th>
+              {oxides.map((ox) => (
+                <th key={ox} className="px-2 py-1.5 text-right font-normal">
+                  <span>{formula(ox)}</span>
+                  <span className="ml-1 text-[10px] text-ink-3 font-mono">({basisLabel(basis)})</span>
+                </th>
+              ))}
+              {models.map((m) => (
+                <th key={m} className="py-1.5 pl-3 text-right font-medium text-ink-2">
+                  {models.length > 1 ? m : <Tg />}, °C
+                </th>
+              ))}
+            </tr>
+          </thead>
         <tbody>
           {glasses.map((g, i) => (
             <motion.tr
@@ -249,6 +300,7 @@ function MultiTable({ glasses, oxides, basis }: { glasses: PredictedGlass[]; oxi
           ))}
         </tbody>
       </table>
+      </div>
       <p className="mt-2 text-xs text-ink-3">
         Oxides in {basisLabel(basis)}
         {basis === "wt" && ", converted to mol % for the models"}. ± is each model&apos;s typical error.

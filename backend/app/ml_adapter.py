@@ -36,6 +36,16 @@ MOLAR_MASSES = {
     "SiO2": 60.084,
     "B2O3": 69.620,
     "Na2O": 61.979,
+    "Al2O3": 101.961,
+    "P2O5": 141.944,
+    "GeO2": 104.630,
+    "As2O3": 197.841,
+    "V2O5": 181.880,
+    "FeO": 71.844,
+    "Fe2O3": 159.687,
+    "MnO": 70.937,
+    "Mn2O3": 157.874,
+    "MnO2": 86.936,
 }
 
 # Properties that have trained models. Add an entry here when a new model is ready.
@@ -144,8 +154,11 @@ PREDICTORS = {
 # ---------------------------------------------------------------------------
 import csv
 
-# Oxides known across the platform (models + glass formers)
-ALL_BANK_OXIDES = ["SiO2", "B2O3", "Na2O", "Al2O3", "P2O5", "GeO2", "As2O3", "V2O5"]
+# Oxides known across the platform (models + glass formers + transition metal oxides)
+ALL_BANK_OXIDES = [
+    "SiO2", "B2O3", "Na2O", "Al2O3", "P2O5", "GeO2", "As2O3", "V2O5",
+    "FeO", "Fe2O3", "MnO", "Mn2O3", "MnO2"
+]
 # Columns actually present in the training dataset CSV
 DATASET_OXIDE_COLS = ["SiO2", "B2O3", "Na2O"]
 

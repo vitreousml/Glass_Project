@@ -3,6 +3,9 @@
 // Placeholder text until the real wording is decided.
 export const WATERMARK = "SAMPLE WATERMARK · Glass Studio · COE-DSAI, TIET Patiala · Lorem ipsum dolor sit amet";
 
+export const ACKNOWLEDGEMENT_NOTICE =
+  "Thank you for using Glass Studio. If you use these predictions or dataset records in your research, thesis, or publications, please cite and acknowledge: Glass Studio · Center of Excellence in Data Science and AI (COE-DSAI), TIET Patiala.";
+
 export interface Report {
   title: string;
   /** Short lines under the title: date, model, unit… */
@@ -34,10 +37,13 @@ export function reportToCsv(r: Report): string {
     [r.title],
     ...r.meta.map((m) => [m]),
     [],
+    ["Acknowledgement & Citation Request:", ACKNOWLEDGEMENT_NOTICE],
+    [],
     r.columns,
     ...r.rows,
     ...(r.notes?.length ? [[], ["Notes"], ...r.notes.map((n) => [n])] : []),
     [],
+    [ACKNOWLEDGEMENT_NOTICE],
     [WATERMARK],
   ];
   return lines.map((l) => l.map(csvCell).join(",")).join("\r\n");
@@ -80,6 +86,9 @@ function reportHtml(r: Report): string {
 </style></head><body>
 <div class="wm"><span>${esc(WATERMARK)}</span></div>
 <div class="band">${esc(WATERMARK)}</div>
+<div style="border: 1px solid #c9c0ae; background: #faf8f5; padding: 6px 10px; margin: 0 0 12px; font-size: 11px; color: #57524a;">
+  <strong>Citation & Acknowledgement Request:</strong> ${esc(ACKNOWLEDGEMENT_NOTICE)}
+</div>
 <h1>${esc(r.title)}</h1>
 <p class="meta">${r.meta.map(esc).join("<br>")}</p>
 <table><thead><tr>${r.columns

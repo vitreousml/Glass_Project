@@ -349,6 +349,18 @@ def delete_user_project(
     uid = user.get("uid")
     return project_service.delete_project(user_id=uid, project_id=project_id)
 
+@app.delete("/api/v1/projects/{project_id}/predictions/{prediction_id}")
+def delete_user_prediction(
+    project_id: str,
+    prediction_id: str,
+    user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Delete a single prediction from a project.
+    """
+    uid = user.get("uid")
+    return project_service.delete_prediction(user_id=uid, project_id=project_id, prediction_id=prediction_id)
+
 @app.post("/api/v1/predict")
 def predict_glass(
     data: CompositionInput,

@@ -8,6 +8,7 @@ import {
   listProjects,
   createProject,
   deleteProject,
+  deletePrediction,
   getProjectDetails,
 } from "@/lib/api";
 
@@ -21,6 +22,7 @@ interface ProjectContextType {
   fetchProjects: () => Promise<Project[]>;
   createNewProject: (name: string, description?: string) => Promise<Project>;
   removeProject: (projectId: string) => Promise<void>;
+  removePrediction: (projectId: string, predictionId: string) => Promise<void>;
   loadProjectDetails: (projectId: string) => Promise<ProjectDetails>;
   refreshActiveProject: () => Promise<void>;
 }
@@ -37,6 +39,7 @@ const ProjectContext = createContext<ProjectContextType>({
     throw new Error("ProjectContext not initialized");
   },
   removeProject: async () => {},
+  removePrediction: async () => {},
   loadProjectDetails: async () => {
     throw new Error("ProjectContext not initialized");
   },
@@ -150,6 +153,18 @@ export const ProjectProvider = ({ children }: { children: React.ReactNode }) => 
     }
   };
 
+  const removePrediction = async (projectId: string, predictionId: string): Promise<void> => {
+    await deletePrediction(projectId, predictionId, token);
+    await refreshActiveProject();
+    setProjects((prev) =>
+      prev.map((p) =>
+        p.id === projectId
+          ? { ...p, predictionCount: Math.max(0, p.predictionCount - 1) }
+          : p
+      )
+    );
+  };
+
   const loadProjectDetails = async (projectId: string): Promise<ProjectDetails> => {
     return await getProjectDetails(projectId, token);
   };
@@ -181,6 +196,7 @@ export const ProjectProvider = ({ children }: { children: React.ReactNode }) => 
         fetchProjects,
         createNewProject,
         removeProject,
+        removePrediction,
         loadProjectDetails,
         refreshActiveProject,
       }}

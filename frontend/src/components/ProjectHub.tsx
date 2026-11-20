@@ -14,11 +14,13 @@ import {
   Trash2,
   Check,
   Lock,
+  Eye,
 } from "lucide-react";
 import { useProject } from "@/context/ProjectContext";
 import { Button } from "@/components/ui/Button";
 import { Project } from "@/lib/api";
 import { DeleteConfirmModal } from "@/components/profile/DeleteConfirmModal";
+import { ProjectDetailsModal } from "@/components/profile/ProjectDetailsModal";
 import { T, SPRING } from "@/lib/motion";
 
 export function ProjectHub({ onProceed }: { onProceed?: () => void }) {
@@ -39,6 +41,9 @@ export function ProjectHub({ onProceed }: { onProceed?: () => void }) {
   // Deletion modal
   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Details modal
+  const [projectForDetails, setProjectForDetails] = useState<Project | null>(null);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -273,6 +278,18 @@ export function ProjectHub({ onProceed }: { onProceed?: () => void }) {
 
                     <div className="flex items-center gap-2 shrink-0 pt-1 sm:pt-0">
                       <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setProjectForDetails(p);
+                        }}
+                        title="View project prediction details"
+                      >
+                        <Eye className="h-3.5 w-3.5 mr-1" aria-hidden />
+                        Details
+                      </Button>
+                      <Button
                         variant={isSelected ? "secondary" : "primary"}
                         size="sm"
                         onClick={(e) => {
@@ -311,6 +328,13 @@ export function ProjectHub({ onProceed }: { onProceed?: () => void }) {
         isDeleting={isDeleting}
         onClose={() => setProjectToDelete(null)}
         onConfirm={handleDeleteConfirm}
+      />
+
+      {/* Project Details Modal */}
+      <ProjectDetailsModal
+        project={projectForDetails}
+        open={!!projectForDetails}
+        onClose={() => setProjectForDetails(null)}
       />
     </div>
   );

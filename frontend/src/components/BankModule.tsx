@@ -22,7 +22,7 @@ import {
 } from "@/lib/chem";
 import { DURATION, EASE_IN, SPRING, T } from "@/lib/motion";
 import { fixed, kToC } from "@/lib/units";
-import { downloadCsv, printReport, reportDate, WATERMARK, type Report } from "@/lib/export";
+import { downloadCsv, printReport, reportDate, WATERMARK, ACKNOWLEDGEMENT_NOTICE, type Report } from "@/lib/export";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/Button";
 import { Drawer } from "@/components/ui/Drawer";
@@ -33,9 +33,12 @@ import { Box, Section } from "@/components/seer/SetupStep";
 
 const ELEMENT_BY_SYMBOL = Object.fromEntries(PERIODIC_ELEMENTS.map((e) => [e.symbol, e]));
 
-const oxidesFor = (symbols: string[], excluded: string[]) =>
+const getOxideForSymbol = (sym: string, choices: Record<string, string>) =>
+  choices[sym] || ELEMENT_BY_SYMBOL[sym]?.oxide || "";
+
+const oxidesFor = (symbols: string[], excluded: string[], choices: Record<string, string> = {}) =>
   symbols
-    .map((s) => ELEMENT_BY_SYMBOL[s]?.oxide)
+    .map((s) => getOxideForSymbol(s, choices))
     .filter((ox): ox is string => !!ox && !excluded.includes(ox));
 
 /** Max properties the user can select in Bank (max 2). */
@@ -66,6 +69,10 @@ export default function BankModule() {
   // --- Element selection (Periodic table) ---
   const [selected, setSelected] = useState<string[]>([]);
   const [excluded, setExcluded] = useState<string[]>([]);
+  const [oxideChoices, setOxideChoices] = useState<Record<string, string>>({
+    Fe: "Fe2O3",
+    Mn: "MnO2",
+  });
   const [selectionError, setSelectionError] = useState<string | null>(null);
 
   // --- Property selection (max 2) ---
@@ -80,17 +87,13 @@ export default function BankModule() {
   const [result, setResult] = useState<BankQueryResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const allOxides = symbolsToOxides(selected);
-  const activeOxides = oxidesFor(selected, excluded);
+  const allOxides = selected
+    .map((s) => getOxideForSymbol(s, oxideChoices))
+    .filter((ox): ox is string => !!ox);
+  const activeOxides = oxidesFor(selected, excluded, oxideChoices);
 
   const canContinue = activeOxides.length > 0 && properties.length > 0;
   const currentStep = canContinue ? step.n : 1;
-
-  function symbolsToOxides(symbols: string[]) {
-    return symbols
-      .map((s) => ELEMENT_BY_SYMBOL[s]?.oxide)
-      .filter((ox): ox is string => !!ox);
-  }
 
   const toggleElement = (el: ElementData) => {
     if (!el.supported) return;
@@ -106,11 +109,18 @@ export default function BankModule() {
       ? [...selected, el.symbol]
       : selected.filter((s) => s !== el.symbol);
     setSelected(symbols);
-    // If element is removed, un-exclude its oxide
-    if (el.oxide && !adding) {
-      setExcluded((prev) => prev.filter((o) => o !== el.oxide));
+    // If element is removed, un-exclude its current oxide
+    const currentOx = getOxideForSymbol(el.symbol, oxideChoices);
+    if (!adding && currentOx) {
+      setExcluded((prev) => prev.filter((o) => o !== currentOx));
     }
     if (symbols.length === 0) setOpen(false);
+  };
+
+  const handleOxideChoiceChange = (sym: string, newOx: string) => {
+    const oldOx = getOxideForSymbol(sym, oxideChoices);
+    setOxideChoices((prev) => ({ ...prev, [sym]: newOx }));
+    setExcluded((prev) => prev.map((o) => (o === oldOx ? newOx : o)));
   };
 
   const toggleOxide = (ox: string) => {
@@ -173,8 +183,7 @@ export default function BankModule() {
     }
     const cols = [
       ...result.oxides.map((ox) => `${ox} (mol %)`),
-      ...result.properties.map((p) => (p === "Tg" ? "Tg (K)" : p)),
-      ...result.properties.filter((p) => p === "Tg").map(() => "Tg (°C)"),
+      ...result.properties.map((p) => (p === "Tg" ? "Tg (°C)" : p)),
     ];
 
     const rows: (string | number)[][] = result.rows.map((row) => {
@@ -184,12 +193,10 @@ export default function BankModule() {
       }
       for (const p of result.properties) {
         const val = row[p];
-        r.push(val != null ? Number(fixed(val, 2)) : "—");
-      }
-      for (const p of result.properties) {
-        const val = row[p];
         if (p === "Tg") {
           r.push(val != null ? Number(fixed(kToC(val), 1)) : "—");
+        } else {
+          r.push(val != null ? Number(fixed(val, 2)) : "—");
         }
       }
       return r;
@@ -240,6 +247,7 @@ export default function BankModule() {
       {/* Selection bar */}
       <BankSelectionBar
         selected={selected}
+        oxideChoices={oxideChoices}
         onRemove={(sym) => toggleElement(ELEMENT_BY_SYMBOL[sym])}
         onClear={() => {
           setSelected([]);
@@ -343,6 +351,9 @@ export default function BankModule() {
                   onToggleOxide={toggleOxide}
                   properties={properties}
                   onToggleProperty={toggleProperty}
+                  selectedElements={selected}
+                  oxideChoices={oxideChoices}
+                  onOxideChoiceChange={handleOxideChoiceChange}
                 />
               ) : (
                 <>
@@ -446,14 +457,24 @@ function BankSetupStep({
   onToggleOxide,
   properties,
   onToggleProperty,
+  selectedElements = [],
+  oxideChoices = {},
+  onOxideChoiceChange,
 }: {
   oxides: string[];
   excluded: string[];
   onToggleOxide: (ox: string) => void;
   properties: string[];
   onToggleProperty: (id: string) => void;
+  selectedElements?: string[];
+  oxideChoices?: Record<string, string>;
+  onOxideChoiceChange?: (sym: string, ox: string) => void;
 }) {
   const activeOxides = oxides.filter((ox) => !excluded.includes(ox));
+
+  const multiOxideElements = (selectedElements || [])
+    .map((sym) => PERIODIC_ELEMENTS.find((e) => e.symbol === sym))
+    .filter((e): e is (typeof PERIODIC_ELEMENTS)[0] => !!e && !!e.oxides && e.oxides.length > 1);
 
   return (
     <div className="space-y-6">
@@ -502,6 +523,47 @@ function BankSetupStep({
         )}
       </Section>
 
+      {/* Multi-oxide state selector for elements with multiple oxidation states (e.g., Fe, Mn) */}
+      {multiOxideElements.length > 0 && (
+        <Section
+          title="Oxide state selection"
+          hint="Select which oxidation state to query for elements with multiple oxides (one active at a time)."
+        >
+          <div className="space-y-3">
+            {multiOxideElements.map((el) => {
+              const currentOx = oxideChoices[el.symbol] || el.oxide || "";
+              return (
+                <div key={el.symbol} className="rounded-md border border-line bg-surface p-3">
+                  <div className="mb-2 text-xs font-semibold text-ink">
+                    {el.name} ({el.symbol}) oxide state
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {(el.oxides || []).map((ox) => {
+                      const active = currentOx === ox;
+                      return (
+                        <button
+                          key={ox}
+                          type="button"
+                          onClick={() => onOxideChoiceChange?.(el.symbol, ox)}
+                          className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors ${
+                            active
+                              ? "border-ink bg-ink text-paper"
+                              : "border-line bg-surface text-ink-2 hover:border-line-strong hover:text-ink"
+                          }`}
+                        >
+                          <Formula>{ox}</Formula>
+                          {active && <span className="text-[10px] opacity-80">(Active)</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Section>
+      )}
+
       {/* 2. Property Selection (Max 2 properties) */}
       <Section
         title={`Property selection (${properties.length}/${MAX_BANK_PROPERTIES})`}
@@ -541,7 +603,7 @@ function BankSetupStep({
                   </div>
                   <div className="text-xs text-ink-3">
                     {hasDataInBank
-                      ? "Experimental data available in bank (K / °C)"
+                      ? "Experimental data available in bank (°C)"
                       : "Optional property (not recorded in current ternary CSV)"}
                   </div>
                 </div>
@@ -573,9 +635,20 @@ function BankDataTable({
   onReport: () => Report;
 }) {
   const [page, setPage] = useState(0);
+  const [showAckToast, setShowAckToast] = useState(false);
   const perPage = 25;
   const totalPages = Math.ceil(result.rows.length / perPage);
   const paged = result.rows.slice(page * perPage, (page + 1) * perPage);
+
+  const handleDownloadCsv = () => {
+    downloadCsv(onReport(), "glass-studio-bank");
+    setShowAckToast(true);
+  };
+
+  const handlePrint = () => {
+    printReport(onReport());
+    setShowAckToast(true);
+  };
 
   return (
     <section className="space-y-4">
@@ -598,7 +671,7 @@ function BankDataTable({
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => downloadCsv(onReport(), "glass-studio-bank")}
+            onClick={handleDownloadCsv}
             disabled={result.rows.length === 0}
           >
             <Download className="h-3.5 w-3.5" aria-hidden />
@@ -607,7 +680,7 @@ function BankDataTable({
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => printReport(onReport())}
+            onClick={handlePrint}
             disabled={result.rows.length === 0}
           >
             <Printer className="h-3.5 w-3.5" aria-hidden />
@@ -615,6 +688,32 @@ function BankDataTable({
           </Button>
         </div>
       </div>
+
+      <AnimatePresence>
+        {showAckToast && (
+          <motion.aside
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 6 }}
+            className="rounded-lg border border-line-strong bg-surface-2 p-3 text-xs text-ink-2 shadow-sm"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className="space-y-1">
+                <p className="font-semibold text-ink">Citation & Acknowledgement Request</p>
+                <p>{ACKNOWLEDGEMENT_NOTICE}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAckToast(false)}
+                aria-label="Dismiss notice"
+                className="rounded p-1 text-ink-3 hover:bg-surface hover:text-ink"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </motion.aside>
+        )}
+      </AnimatePresence>
 
       {result.rows.length === 0 ? (
         <div className="rounded-lg border border-line bg-surface p-8 text-center space-y-2">
@@ -638,22 +737,12 @@ function BankDataTable({
                   ))}
                   {result.properties.map((p) => (
                     <th
-                      key={`${p}-k`}
+                      key={p}
                       className="px-3 py-2 text-right font-medium text-ink-2"
                     >
-                      {p === "Tg" ? <Tg /> : p} (K)
+                      {p === "Tg" ? <><Tg /> (°C)</> : p}
                     </th>
                   ))}
-                  {result.properties
-                    .filter((p) => p === "Tg")
-                    .map((p) => (
-                      <th
-                        key={`${p}-c`}
-                        className="px-3 py-2 text-right font-medium text-ink-2"
-                      >
-                        {p === "Tg" ? <Tg /> : p} (°C)
-                      </th>
-                    ))}
                 </tr>
               </thead>
               <tbody>
@@ -672,22 +761,18 @@ function BankDataTable({
                     ))}
                     {result.properties.map((p) => (
                       <td
-                        key={`${p}-k`}
+                        key={p}
                         className="num px-3 py-2 text-right font-medium text-ink"
                       >
-                        {row[p] != null ? fixed(row[p] as number, 2) : "—"}
+                        {p === "Tg"
+                          ? row[p] != null
+                            ? fixed(kToC(row[p] as number), 1)
+                            : "—"
+                          : row[p] != null
+                          ? fixed(row[p] as number, 2)
+                          : "—"}
                       </td>
                     ))}
-                    {result.properties
-                      .filter((p) => p === "Tg")
-                      .map((p) => (
-                        <td
-                          key={`${p}-c`}
-                          className="num px-3 py-2 text-right text-ink-3"
-                        >
-                          {row[p] != null ? fixed(kToC(row[p] as number), 1) : "—"}
-                        </td>
-                      ))}
                   </tr>
                 ))}
               </tbody>
@@ -745,12 +830,14 @@ function BankSelectionBar({
   onClear,
   onContinue,
   error,
+  oxideChoices = {},
 }: {
   selected: string[];
   onRemove: (symbol: string) => void;
   onClear: () => void;
   onContinue: () => void;
   error: string | null;
+  oxideChoices?: Record<string, string>;
 }) {
   const ready = selected.length > 0;
   const OXIDE_OF = Object.fromEntries(
@@ -787,7 +874,7 @@ function BankSelectionBar({
                   <span className="text-ink-3" aria-hidden>
                     →
                   </span>
-                  <span>{formula(OXIDE_OF[sym])}</span>
+                  <span>{formula(oxideChoices[sym] || OXIDE_OF[sym])}</span>
                   <button
                     type="button"
                     onClick={() => onRemove(sym)}
@@ -851,7 +938,6 @@ function BankSelectionBar({
     </div>
   );
 }
-
 function BankSkeleton() {
   return (
     <div className="space-y-3 rounded-lg border border-line bg-surface p-5">

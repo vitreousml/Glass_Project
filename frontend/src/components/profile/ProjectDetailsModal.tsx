@@ -9,6 +9,7 @@ import {
   Clock,
   AlertCircle,
   Play,
+  Trash2,
 } from "lucide-react";
 import { Project, PredictionRecord } from "@/lib/api";
 import { useProject } from "@/context/ProjectContext";
@@ -24,10 +25,25 @@ interface ProjectDetailsModalProps {
 }
 
 export function ProjectDetailsModal({ project, open, onClose }: ProjectDetailsModalProps) {
-  const { loadProjectDetails, setActiveProject, activeProject } = useProject();
+  const { loadProjectDetails, setActiveProject, activeProject, removePrediction } = useProject();
   const [predictions, setPredictions] = useState<PredictionRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [deletingPredId, setDeletingPredId] = useState<string | null>(null);
+
+  const handleDeletePrediction = async (predictionId: string) => {
+    if (!project) return;
+    if (!confirm("Are you sure you want to delete this prediction from the project?")) return;
+    setDeletingPredId(predictionId);
+    try {
+      await removePrediction(project.id, predictionId);
+      setPredictions((prev) => prev.filter((p) => p.id !== predictionId));
+    } catch (err: any) {
+      alert(err?.message || "Failed to delete prediction");
+    } finally {
+      setDeletingPredId(null);
+    }
+  };
 
   useEffect(() => {
     if (!open || !project) return;
@@ -166,9 +182,21 @@ export function ProjectDetailsModal({ project, open, onClose }: ProjectDetailsMo
                           {p.compositionBasis} %
                         </span>
                       </div>
-                      <span className="text-xs text-ink-3 num">
-                        {formatDate(p.createdAt)}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-ink-3 num">
+                          {formatDate(p.createdAt)}
+                        </span>
+                        <button
+                          type="button"
+                          disabled={deletingPredId === p.id}
+                          onClick={() => handleDeletePrediction(p.id)}
+                          aria-label="Delete prediction"
+                          title="Delete prediction"
+                          className="inline-flex h-6 w-6 items-center justify-center rounded text-ink-3 hover:text-danger hover:bg-danger-bg transition-colors disabled:opacity-40"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
                     </div>
 
                     {/* Composition */}

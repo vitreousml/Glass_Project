@@ -3,6 +3,7 @@
 import React from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Check } from "lucide-react";
+import { PERIODIC_ELEMENTS } from "@/data/elements";
 import { MODELS, MOLAR_MASS, PROPERTIES } from "@/lib/chem";
 import { SPRING, T } from "@/lib/motion";
 import { fixed } from "@/lib/units";
@@ -57,6 +58,9 @@ export function SetupStep({
   onToggleProperty,
   model,
   onModel,
+  selectedElements,
+  oxideChoices = {},
+  onOxideChoiceChange,
 }: {
   oxides: string[];
   excluded: string[];
@@ -65,11 +69,18 @@ export function SetupStep({
   onToggleProperty: (id: string) => void;
   model: string;
   onModel: (id: string) => void;
+  selectedElements?: string[];
+  oxideChoices?: Record<string, string>;
+  onOxideChoiceChange?: (sym: string, ox: string) => void;
 }) {
   const modelOptions = [
     ...MODELS.map((m) => ({ id: m.id, name: m.name, detail: `±${fixed(m.mae, 0)} °C · R² ${m.r2}` })),
     { id: "ALL", name: "Compare all four", detail: "RF, XGB, KNN and SVM side by side" },
   ];
+
+  const multiOxideElements = (selectedElements || [])
+    .map((sym) => PERIODIC_ELEMENTS.find((e) => e.symbol === sym))
+    .filter((e): e is (typeof PERIODIC_ELEMENTS)[0] => !!e && !!e.oxides && e.oxides.length > 1);
 
   return (
     <div className="space-y-6">
@@ -105,6 +116,45 @@ export function SetupStep({
             })}
           </AnimatePresence>
         </div>
+
+        {/* Oxidation State Choice for Multi-Oxide Elements (Fe, Mn) */}
+        {multiOxideElements.length > 0 && (
+          <div className="mt-3 space-y-2 border-t border-line pt-3">
+            {multiOxideElements.map((el) => {
+              const currentOx = oxideChoices[el.symbol] || el.oxide;
+              return (
+                <div key={el.symbol} className="rounded-md border border-line bg-surface-2/40 p-2.5 space-y-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-semibold text-ink">
+                      {el.name} ({el.symbol}) oxidation state:
+                    </span>
+                    <span className="text-ink-3 text-[11px]">One active at a time</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {el.oxides!.map((oxOption) => {
+                      const isChosen = currentOx === oxOption;
+                      return (
+                        <button
+                          key={oxOption}
+                          type="button"
+                          onClick={() => onOxideChoiceChange?.(el.symbol, oxOption)}
+                          className={`inline-flex items-center gap-1 rounded px-2.5 py-1 text-xs font-medium transition-colors ${
+                            isChosen
+                              ? "bg-ink text-paper font-semibold"
+                              : "border border-line bg-surface text-ink hover:bg-surface-2"
+                          }`}
+                        >
+                          <Formula>{oxOption}</Formula>
+                          {isChosen && <Check className="h-3 w-3 ml-0.5" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </Section>
 
       <Section title="Properties" hint="What to predict.">

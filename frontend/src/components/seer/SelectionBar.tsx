@@ -27,6 +27,7 @@ export function SelectionBar({
   mode,
   onMode,
   error,
+  oxideChoices = {},
 }: {
   selected: string[];
   onRemove: (symbol: string) => void;
@@ -36,6 +37,7 @@ export function SelectionBar({
   onMode: (m: CompositionMode) => void;
   /** Why Continue can't go ahead (or why a click was refused). */
   error: string | null;
+  oxideChoices?: Record<string, string>;
 }) {
   const ready = selected.length > 0;
 
@@ -71,7 +73,7 @@ export function SelectionBar({
                 <span className="text-ink-3" aria-hidden>
                   →
                 </span>
-                <span>{formula(OXIDE_OF[sym])}</span>
+                <span>{formula(oxideChoices[sym] || OXIDE_OF[sym])}</span>
                 <button
                   type="button"
                   onClick={() => onRemove(sym)}

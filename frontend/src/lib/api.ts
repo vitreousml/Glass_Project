@@ -124,6 +124,13 @@ export const getProjectDetails = (projectId: string, token?: string | null): Pro
 export const deleteProject = (projectId: string, token?: string | null): Promise<{ success: boolean; deletedProjectId: string; deletedPredictionsCount: number; message: string }> =>
   call(`/api/v1/projects/${projectId}`, { method: "DELETE" }, token);
 
+export const deletePrediction = (
+  projectId: string,
+  predictionId: string,
+  token?: string | null
+): Promise<{ success: boolean; deletedPredictionId: string; remainingCount: number; message: string }> =>
+  call(`/api/v1/projects/${projectId}/predictions/${predictionId}`, { method: "DELETE" }, token);
+
 // Returns every value in Kelvin; the page converts to °C for display.
 // Mandatorily associated with a project.
 export const predictProperties = (

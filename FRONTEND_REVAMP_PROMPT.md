@@ -1,4 +1,4 @@
-# Frontend revamp brief: Glass Studio
+# Frontend revamp brief: Glass
 
 You are redesigning the frontend of a research tool. Read this whole brief, then read the code, before changing anything. The owner's two requirements are: **motion on every screen and every state change**, and **it must not look AI-generated**. Everything below serves those two.
 

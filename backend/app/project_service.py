@@ -185,9 +185,17 @@ def save_prediction_under_project(
             detail=f"Project '{project_id}' not found. You must select an existing project."
         )
 
+    # Restrict to maximum 50 predictions per project
+    current_count = int(project.get("predictionCount", 0))
+    if current_count >= 50:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Project prediction limit reached (50/50). Please create a new project or delete older predictions to proceed."
+        )
+
     prediction_id = f"pred_{uuid.uuid4().hex[:12]}"
     now = _now_iso()
-    new_count = int(project.get("predictionCount", 0)) + 1
+    new_count = current_count + 1
 
     prediction_record = {
         "id": prediction_id,
@@ -267,4 +275,48 @@ def delete_project(user_id: str, project_id: str) -> Dict[str, Any]:
         "deletedProjectId": project_id,
         "deletedPredictionsCount": deleted_preds_count,
         "message": f"Project '{project.get('name')}' and all {deleted_preds_count} predictions were deleted."
+    }
+
+def delete_prediction(user_id: str, project_id: str, prediction_id: str) -> Dict[str, Any]:
+    """
+    Delete a single prediction from a project and decrement predictionCount.
+    """
+    project = get_project(user_id, project_id)
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Project '{project_id}' not found."
+        )
+
+    now = _now_iso()
+    new_count = max(0, int(project.get("predictionCount", 1)) - 1)
+
+    if _use_firestore():
+        try:
+            db = get_firestore_db()
+            project_ref = db.collection("users").document(user_id).collection("projects").document(project_id)
+            pred_ref = project_ref.collection("predictions").document(prediction_id)
+            pred_ref.delete()
+            project_ref.update({
+                "predictionCount": new_count,
+                "updatedAt": now
+            })
+        except Exception as e:
+            print(f"[WARN] Firestore delete_prediction failed: {e}")
+
+    # Sync memory store
+    if user_id in _MEMORY_PROJECTS and project_id in _MEMORY_PROJECTS[user_id]:
+        _MEMORY_PROJECTS[user_id][project_id]["predictionCount"] = new_count
+        _MEMORY_PROJECTS[user_id][project_id]["updatedAt"] = now
+
+    if project_id in _MEMORY_PREDICTIONS:
+        _MEMORY_PREDICTIONS[project_id] = [
+            p for p in _MEMORY_PREDICTIONS[project_id] if p.get("id") != prediction_id
+        ]
+
+    return {
+        "success": True,
+        "deletedPredictionId": prediction_id,
+        "remainingCount": new_count,
+        "message": "Prediction deleted successfully."
     }

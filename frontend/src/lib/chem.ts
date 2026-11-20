@@ -18,6 +18,12 @@ export const MOLAR_MASS: Record<string, number> = {
   GeO2: 104.63,
   As2O3: 197.841,
   V2O5: 181.88,
+  // Transition metal oxides (Fe, Mn)
+  FeO: 71.844,
+  Fe2O3: 159.687,
+  MnO: 70.937,
+  Mn2O3: 157.874,
+  MnO2: 86.936,
 };
 
 /** Oxides the trained models accept. */

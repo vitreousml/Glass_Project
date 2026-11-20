@@ -37,9 +37,12 @@ import { ProjectModal } from "@/components/seer/ProjectModal";
 
 const ELEMENT_BY_SYMBOL = Object.fromEntries(PERIODIC_ELEMENTS.map((e) => [e.symbol, e]));
 
-const oxidesFor = (symbols: string[], excluded: string[]) =>
+const getOxideForSymbol = (sym: string, choices: Record<string, string>) =>
+  choices[sym] || ELEMENT_BY_SYMBOL[sym]?.oxide || "";
+
+const oxidesFor = (symbols: string[], excluded: string[], choices: Record<string, string> = {}) =>
   symbols
-    .map((s) => ELEMENT_BY_SYMBOL[s]?.oxide)
+    .map((s) => getOxideForSymbol(s, choices))
     .filter((ox): ox is string => !!ox && !excluded.includes(ox));
 
 type Ranges = Record<string, { min: number; max: number }>;
@@ -88,6 +91,10 @@ export default function SeerModule() {
 
   const [selected, setSelected] = useState<string[]>([]); // element symbols, in click order
   const [excluded, setExcluded] = useState<string[]>([]);
+  const [oxideChoices, setOxideChoices] = useState<Record<string, string>>({
+    Fe: "Fe2O3",
+    Mn: "MnO2",
+  });
   const [properties, setProperties] = useState<string[]>(["Tg"]);
   const [model, setModel] = useState("RF");
   const [basis, setBasis] = useState<CompositionBasis>("mol");
@@ -114,10 +121,12 @@ export default function SeerModule() {
       .catch(() => setRanges(null));
   }, []);
 
-  const allOxides = oxidesFor(selected, []);
-  const activeOxides = oxidesFor(selected, excluded);
+  const allOxides = oxidesFor(selected, [], oxideChoices);
+  const activeOxides = oxidesFor(selected, excluded, oxideChoices);
   const canContinue = activeOxides.length > 0 && properties.length > 0;
   const currentStep = canContinue ? step.n : 1;
+
+  const isProjectLimitReached = (activeProject?.predictionCount ?? 0) >= 50;
 
   const region = useMemo(() => (ranges ? rangeRegion(ranges) : []), [ranges]);
   const rangeC: [number, number] | undefined = ranges?.Tg ? [kToC(ranges.Tg.min), kToC(ranges.Tg.max)] : undefined;
@@ -135,7 +144,7 @@ export default function SeerModule() {
   const rowsReady = rows.length > 0 && rows.every((r) => rowValid(r, activeOxides));
   const formers = formerOxides(activeOxides);
   const unmodelled = activeOxides.filter((ox) => !isModelled(ox));
-  const canPredict = activeOxides.length > 0 && unmodelled.length === 0 && (mode === "single" || rowsReady);
+  const canPredict = activeOxides.length > 0 && unmodelled.length === 0 && (mode === "single" || rowsReady) && !isProjectLimitReached;
 
   // --- Glass former set to 0 -------------------------------------------------
   // While a pointer is down (dragging a slider), wait for the release before asking,
@@ -230,10 +239,14 @@ export default function SeerModule() {
     setOpen(true);
   };
 
-  const updateSelection = (symbols: string[], nextExcluded: string[]) => {
+  const updateSelection = (
+    symbols: string[],
+    nextExcluded: string[],
+    nextChoices: Record<string, string> = oxideChoices,
+  ) => {
     setSelected(symbols);
     setExcluded(nextExcluded);
-    setComposition((prev) => rebalance(prev, oxidesFor(symbols, nextExcluded)));
+    setComposition((prev) => rebalance(prev, oxidesFor(symbols, nextExcluded, nextChoices)));
     if (symbols.length === 0) setOpen(false);
   };
 
@@ -246,7 +259,34 @@ export default function SeerModule() {
     }
     setSelectionError(null);
     const symbols = adding ? [...selected, el.symbol] : selected.filter((s) => s !== el.symbol);
-    updateSelection(symbols, excluded.filter((ox) => ox !== el.oxide));
+    const currentOx = oxideChoices[el.symbol] || el.oxide || "";
+    updateSelection(symbols, excluded.filter((ox) => ox !== currentOx));
+  };
+
+  const handleOxideChoiceChange = (sym: string, newOx: string) => {
+    const oldOx = oxideChoices[sym] || ELEMENT_BY_SYMBOL[sym]?.oxide || "";
+    const nextChoices = { ...oxideChoices, [sym]: newOx };
+    setOxideChoices(nextChoices);
+    setComposition((prev) => {
+      const next = { ...prev };
+      if (oldOx in next) {
+        next[newOx] = next[oldOx];
+        delete next[oldOx];
+      }
+      return next;
+    });
+    setRows((prev) =>
+      prev.map((r) => {
+        const nextVals = { ...r.values };
+        if (oldOx in nextVals) {
+          nextVals[newOx] = nextVals[oldOx];
+          delete nextVals[oldOx];
+        }
+        return { ...r, values: nextVals };
+      }),
+    );
+    const nextExcluded = excluded.map((o) => (o === oldOx ? newOx : o));
+    setExcluded(nextExcluded);
   };
 
   const toggleOxide = (ox: string) =>
@@ -302,6 +342,11 @@ export default function SeerModule() {
     if (!activeProject) {
       setError("A project must be created and selected before performing a prediction.");
       setProjectModalOpen(true);
+      return;
+    }
+
+    if (isProjectLimitReached) {
+      setError("This project has reached the 50 prediction limit (50/50). Please delete older predictions or switch to a new project.");
       return;
     }
 
@@ -365,6 +410,7 @@ export default function SeerModule() {
         mode={mode}
         onMode={chooseMode}
         error={selectionError}
+        oxideChoices={oxideChoices}
       />
 
       <Drawer
@@ -458,10 +504,24 @@ export default function SeerModule() {
                   onToggleProperty={toggleProperty}
                   model={model}
                   onModel={setModel}
+                  selectedElements={selected}
+                  oxideChoices={oxideChoices}
+                  onOxideChoiceChange={handleOxideChoiceChange}
                 />
               ) : (
                 <>
                   <ProjectBanner className="mb-2" />
+                  {isProjectLimitReached && (
+                    <div
+                      role="alert"
+                      className="flex items-start gap-2 rounded-md bg-warn-bg px-3 py-2 text-sm text-warn"
+                    >
+                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+                      <div>
+                        <span className="font-semibold">Project prediction limit reached (50/50):</span> This project has reached the 50 prediction limit. Please delete older predictions from this project or create a new project to continue predicting.
+                      </div>
+                    </div>
+                  )}
                   <SegmentedToggle
                     id="mode-drawer"
                     label="How many compositions"
@@ -567,6 +627,8 @@ export default function SeerModule() {
               >
                 {!activeProject
                   ? "Select Project to Predict"
+                  : isProjectLimitReached
+                  ? "Project limit reached (50/50)"
                   : loading
                   ? "Predicting…"
                   : `Predict${mode === "multiple" ? ` ${rows.length} glass${rows.length === 1 ? "" : "es"}` : ""}${

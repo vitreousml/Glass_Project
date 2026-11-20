@@ -11,6 +11,8 @@ export interface ElementData {
   noModel?: boolean;
   implicit?: boolean;
   oxide?: string;
+  /** Multiple oxide forms (e.g. Fe -> FeO, Fe2O3; Mn -> MnO, Mn2O3, MnO2). */
+  oxides?: string[];
 }
 
 export const PERIODIC_ELEMENTS: ElementData[] = [
@@ -45,8 +47,8 @@ export const PERIODIC_ELEMENTS: ElementData[] = [
   { number: 22, symbol: "Ti", name: "Titanium", category: "transition", row: 4, col: 4 },
   { number: 23, symbol: "V", name: "Vanadium", category: "transition", row: 4, col: 5, supported: true, noModel: true, oxide: "V2O5" },
   { number: 24, symbol: "Cr", name: "Chromium", category: "transition", row: 4, col: 6 },
-  { number: 25, symbol: "Mn", name: "Manganese", category: "transition", row: 4, col: 7 },
-  { number: 26, symbol: "Fe", name: "Iron", category: "transition", row: 4, col: 8 },
+  { number: 25, symbol: "Mn", name: "Manganese", category: "transition", row: 4, col: 7, supported: true, noModel: true, oxide: "MnO2", oxides: ["MnO", "Mn2O3", "MnO2"] },
+  { number: 26, symbol: "Fe", name: "Iron", category: "transition", row: 4, col: 8, supported: true, noModel: true, oxide: "Fe2O3", oxides: ["FeO", "Fe2O3"] },
   { number: 27, symbol: "Co", name: "Cobalt", category: "transition", row: 4, col: 9 },
   { number: 28, symbol: "Ni", name: "Nickel", category: "transition", row: 4, col: 10 },
   { number: 29, symbol: "Cu", name: "Copper", category: "transition", row: 4, col: 11 },
