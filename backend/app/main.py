@@ -11,8 +11,12 @@ from typing import Dict, List, Literal, Optional, Any
 from datetime import datetime
 
 import app.ml_adapter as ml_adapter
+import app.model_registry as model_registry
 import app.project_service as project_service
+from app.admin_api import router as admin_router
+from app.admin_auth import is_admin
 from app.firebase_auth import init_firebase, get_firestore_db, get_current_user
+from app.model_registry import RegistryError
 
 app = FastAPI(
     title="Glass Composition Prediction Platform API",
@@ -28,6 +32,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Admin portal: model upload, checks, publish, archive, restore, audit log.
+app.include_router(admin_router)
 
 class CompositionInput(BaseModel):
     project_id: Optional[str] = Field(
@@ -91,10 +98,11 @@ class ProfileDetails(BaseModel):
 # Profile fields returned to the signed-in user (never other people's records).
 PROFILE_FIELDS = ["uid", "email", "displayName", "university", "position", "positionOther", "course"]
 
-def _profile_view(record: Dict[str, Any], recorded: bool = True) -> Dict[str, Any]:
+def _profile_view(record: Dict[str, Any], recorded: bool = True, admin: bool = False) -> Dict[str, Any]:
     view = {k: record[k] for k in PROFILE_FIELDS if record.get(k) is not None}
     view["profileComplete"] = bool(record.get("profileCompletedAt"))
     view["recorded"] = recorded
+    view["isAdmin"] = admin  # shows the Admin screen; the API checks the role again on every admin call
     return view
 
 @app.on_event("startup")
@@ -112,6 +120,14 @@ def startup_event():
             print(f"[WARNING] Checksum verification mismatch for {model_file}!")
         else:
             print(f"[OK] Verified SHA-256 for {model_file}")
+
+    # 3. Model registry: register the original four models once, then load what is live.
+    try:
+        model_registry.ensure_builtins()
+        live = model_registry.live_models()
+        print(f"[OK] Model registry ready: {len(live)} live model(s) " + ", ".join(m["code"] for m in live))
+    except Exception as e:
+        print(f"[ERROR] Model registry failed to start: {e}")
 
 # -------------------------------------------------------------
 # Public Endpoints (Metadata & Health)
@@ -134,6 +150,19 @@ def get_elements():
 def get_models_info():
     """Return model performance metrics and properties (publicly accessible)."""
     return ml_adapter.get_models_metadata()
+
+@app.get("/api/v1/catalog")
+def get_catalog():
+    """
+    Everything that is live: properties, models (with inputs, ranges and accuracy)
+    and the oxides they accept. Every page reads this instead of hardcoded lists.
+    """
+    return model_registry.catalog()
+
+@app.get("/api/v1/catalog/version")
+def get_catalog_version():
+    """Cheap check: browsers re-fetch the catalog when this number changes."""
+    return {"version": model_registry.version()}
 
 @app.get("/api/v1/bank/summary")
 def get_bank_summary():
@@ -176,11 +205,12 @@ def query_bank_data(
     # Validate oxides (up to 5 oxides)
     if len(data.oxides) < 1 or len(data.oxides) > 5:
         raise HTTPException(status_code=400, detail="Select between 1 and 5 oxides.")
-    invalid_ox = [ox for ox in data.oxides if ox not in ml_adapter.ALL_BANK_OXIDES]
+    allowed_ox = list(dict.fromkeys(ml_adapter.ALL_BANK_OXIDES + ml_adapter.supported_oxides()))
+    invalid_ox = [ox for ox in data.oxides if ox not in allowed_ox]
     if invalid_ox:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid oxide(s): {invalid_ox}. Allowed: {ml_adapter.ALL_BANK_OXIDES}"
+            detail=f"Invalid oxide(s): {invalid_ox}. Allowed: {allowed_ox}"
         )
 
     # Validate properties (up to 2 properties)
@@ -264,10 +294,10 @@ def read_profile(user: Dict[str, Any] = Depends(get_current_user)):
     """
     uid = user.get("uid")
     if user.get("mock"):
-        return _profile_view({"uid": uid, "email": user.get("email")}, recorded=False)
+        return _profile_view({"uid": uid, "email": user.get("email")}, recorded=False, admin=is_admin(user))
     doc = get_firestore_db().collection("users").document(uid).get()
     record = doc.to_dict() if doc.exists else {"uid": uid, "email": user.get("email")}
-    return _profile_view(record or {})
+    return _profile_view(record or {}, admin=is_admin(user))
 
 @app.put("/api/v1/auth/profile")
 def save_profile(data: ProfileDetails, user: Dict[str, Any] = Depends(get_current_user)):
@@ -296,10 +326,10 @@ def save_profile(data: ProfileDetails, user: Dict[str, Any] = Depends(get_curren
 
     # The offline demo login is fake: never write it to the database.
     if user.get("mock"):
-        return _profile_view(record, recorded=False)
+        return _profile_view(record, recorded=False, admin=is_admin(user))
 
     get_firestore_db().collection("users").document(user["uid"]).set(record, merge=True)
-    return _profile_view(record)
+    return _profile_view(record, admin=is_admin(user))
 
 # -------------------------------------------------------------
 # Project Management Endpoints (User -> Projects -> Predictions)
@@ -397,11 +427,12 @@ def predict_glass(
 
     comp = data.composition
 
-    unknown = [ox for ox in comp if ox not in ml_adapter.SUPPORTED_OXIDES]
+    supported = ml_adapter.supported_oxides()
+    unknown = [ox for ox in comp if ox not in supported]
     if unknown:
         raise HTTPException(
             status_code=400,
-            detail=f"Unsupported oxides: {unknown}. Supported: {ml_adapter.SUPPORTED_OXIDES}"
+            detail=f"Unsupported oxides: {unknown}. Supported: {supported}"
         )
     if any(v < 0 for v in comp.values()):
         raise HTTPException(status_code=400, detail="Oxide amounts cannot be negative.")
@@ -410,33 +441,49 @@ def predict_glass(
 
     if not data.properties:
         raise HTTPException(status_code=400, detail="Choose at least one property to predict.")
-    no_model = [p for p in data.properties if p not in ml_adapter.PROPERTIES]
+    available = ml_adapter.available_properties()
+    no_model = [p for p in data.properties if p not in available]
     if no_model:
         raise HTTPException(
             status_code=400,
-            detail=f"No trained model yet for: {no_model}. Available: {list(ml_adapter.PROPERTIES)}"
+            detail=f"No trained model yet for: {no_model}. Available: {list(available)}"
         )
 
-    if data.model_name and data.model_name not in ml_adapter.MODELS:
+    live_codes = list(dict.fromkeys(m["code"] for p in data.properties for m in model_registry.live_models(p)))
+    if data.model_name and not any(
+        data.model_name in (m["code"], m["id"]) for p in data.properties for m in model_registry.live_models(p)
+    ):
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid model '{data.model_name}'. Choose from: {ml_adapter.MODELS}"
+            detail=f"Invalid model '{data.model_name}'. Choose from: {live_codes}"
         )
-    models = [data.model_name] if data.model_name else ml_adapter.MODELS
 
     if data.composition_basis == "wt":
         comp_mol = ml_adapter.wt_to_mol_percent(comp)
     else:
         comp_mol = dict(comp)
-    # Report every oxide the models use, so the user sees exactly what was evaluated.
-    comp_mol = {ox: float(comp_mol.get(ox, 0.0)) for ox in ml_adapter.SUPPORTED_OXIDES}
+
+    # Only models that accept every oxide in this glass can predict it.
+    used = [ox for ox, v in comp_mol.items() if v > 0]
+    chosen = []
+    for prop in data.properties:
+        matches = model_registry.covering(prop, used, data.model_name)
+        if not matches:
+            who = f"Model '{data.model_name}'" if data.model_name else f"No live {prop} model"
+            raise HTTPException(
+                status_code=400,
+                detail=f"{who} can't predict {prop} for a glass with {', '.join(used)} together."
+            )
+        chosen.extend(matches)
+
+    # Report every oxide the chosen models use, so the user sees exactly what was evaluated.
+    evaluated = list(dict.fromkeys(f for m in chosen for f in m["features"]))
+    comp_mol = {ox: float(comp_mol.get(ox, 0.0)) for ox in evaluated}
 
     try:
-        results = [
-            ml_adapter.PREDICTORS[prop](comp_mol, m)
-            for prop in data.properties
-            for m in models
-        ]
+        results = [model_registry.predict(m, comp_mol) for m in chosen]
+    except RegistryError as e:
+        raise HTTPException(status_code=e.status_code, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -476,7 +523,10 @@ def discover_compositions(
     Uses model bundle to derive features and bounds — nothing hardcoded.
     Requires authenticated user (Firebase ID Token).
     """
-    config = ml_adapter.get_zen_grid_config(data.model_name)
+    try:
+        config = ml_adapter.get_zen_grid_config(data.model_name)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     features: list = config["features"]
     bounds: dict = config["bounds"]
     step: float = config["step"]

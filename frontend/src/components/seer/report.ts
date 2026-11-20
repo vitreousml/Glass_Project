@@ -1,5 +1,5 @@
 import type { CompositionBasis } from "@/lib/api";
-import { MODEL_BY_ID, basisLabel, relevantWarnings, type Composition } from "@/lib/chem";
+import { basisLabel, modelInfo, relevantWarnings, type Composition } from "@/lib/chem";
 import { reportDate, type Report } from "@/lib/export";
 import { fixed, kToC } from "@/lib/units";
 import type { PredictResponse } from "@/components/seer/Results";
@@ -12,7 +12,7 @@ export interface PredictedGlass {
 
 /** Results rounded to whole degrees: the models aren't more precise than that. */
 export const deg = (x: number) => fixed(x, 0);
-export const errorOf = (model: string) => MODEL_BY_ID[model]?.mae;
+export const errorOf = (model: string, property = "Tg") => modelInfo(model, property)?.mae;
 
 /** One row per glass and model, ready for CSV or print. */
 export function buildReport(glasses: PredictedGlass[], oxides: string[], basis: CompositionBasis): Report {
@@ -29,7 +29,7 @@ export function buildReport(glasses: PredictedGlass[], oxides: string[], basis: 
         rows.push([
           i + 1,
           ...oxides.map((ox) => Number(fixed(g.composition[ox] ?? 0))),
-          MODEL_BY_ID[r.model]?.name ?? r.model,
+          modelInfo(r.model)?.name ?? r.model,
           Number(deg(kToC(r.value))),
           mae !== undefined ? `±${deg(mae)}` : "",
           Number(deg(r.value)),

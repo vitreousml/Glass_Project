@@ -1,0 +1,68 @@
+ENV {
+  node: 'v22.23.5',
+  platform: 'Windows_NT 10.0.26300 x64',
+  cpu: '13th Gen Intel(R) Core(TM) i5-1340P',
+  cores: 16,
+  memGB: 15.65
+}
+DATASET {
+  workingDays: 5,
+  teachingPeriodsPerDay: 7,
+  weeklySlots: 35,
+  faculty: 500,
+  facultyWithAllocations: 224,
+  maxFacultyLoad: 5,
+  rooms: 80,
+  roomsByType: {
+    LectureHall: 38,
+    SeminarRoom: 12,
+    ComputerLab: 20,
+    HardwareLab: 10
+  },
+  sections: 32,
+  subgroups: 64,
+  students: 1280,
+  courses: 80,
+  allocations: 288,
+  lectureAllocations: 160,
+  labAllocations: 128,
+  weeklySessionHours: 736,
+  lectureHours: 480,
+  labHours: 256,
+  sectionLectureHoursRange: [ 15, 15 ],
+  sectionLabHoursRange: [ 8, 8 ]
+}
+E2 BALANCED {"profile":"BALANCED","runs":10,"prePenaltyMean":3213,"prePenaltySd":0,"postPenaltyMean":3022.7,"postPenaltySd":30.2,"reductionPctMean":5.92,"reductionPctMin":4.95,"reductionPctMax":7.53,"healthPre":[10,10],"healthPost":[10,10],"phaseAOnlyMsP50":7.51,"phaseAOnlyMsP95":17.71,"balancedTotalMsP50":262.33,"balancedPhaseBMsP50":255.71,"phaseABacktracksMax":0,"validatorHardMax":4,"validatorWarningsMean":57.8,"maxOptSamePenaltyAsBalanced":"10/10","components":{"facultyGapsPenalty":[278,260.6],"facultyConsecutivePenalty":[0,0],"studentGapsPenalty":[0,78.8],"studentConsecutivePenalty":[752,554.4],"studentWorkloadImbalancePenalty":[666,642.9],"courseDistributionPenalty":[1195,1196.5],"buildingTravelPenalty":[345,357.5],"sameSlotEveryDayPenalty":[966,920.7],"roomCapacityFitPenalty":[276,272.5],"facultyPreferenceBonus":[1265,1261.2],"totalPenalty":[3213,3022.7]}}
+E2 STUDENT_FOCUSED {"profile":"STUDENT_FOCUSED","runs":10,"prePenaltyMean":5926,"prePenaltySd":0,"postPenaltyMean":5796.5,"postPenaltySd":54.06,"reductionPctMean":2.19,"reductionPctMin":0.67,"reductionPctMax":3.71,"healthPre":[10,10],"healthPost":[10,10],"phaseAOnlyMsP50":76.31,"phaseAOnlyMsP95":93.7,"balancedTotalMsP50":373.92,"balancedPhaseBMsP50":293.06,"phaseABacktracksMax":0,"validatorHardMax":3,"validatorWarningsMean":31.2,"maxOptSamePenaltyAsBalanced":"10/10","components":{"facultyGapsPenalty":[270,251.6],"facultyConsecutivePenalty":[0,0],"studentGapsPenalty":[0,195.6],"studentConsecutivePenalty":[1504,1253.6],"studentWorkloadImbalancePenalty":[1275,1249.5],"courseDistributionPenalty":[2390,2367],"buildingTravelPenalty":[540,557],"sameSlotEveryDayPenalty":[921,898.8],"roomCapacityFitPenalty":[276,274],"facultyPreferenceBonus":[1250,1250.6],"totalPenalty":[5926,5796.5]}}
+E2 FACULTY_FOCUSED {"profile":"FACULTY_FOCUSED","runs":10,"prePenaltyMean":2819,"prePenaltySd":0,"postPenaltyMean":2670.3,"postPenaltySd":32.59,"reductionPctMean":5.27,"reductionPctMin":3.05,"reductionPctMax":6.67,"healthPre":[10,10],"healthPost":[10,10],"phaseAOnlyMsP50":82.09,"phaseAOnlyMsP95":135.76,"balancedTotalMsP50":404.06,"balancedPhaseBMsP50":299.24,"phaseABacktracksMax":0,"validatorHardMax":2,"validatorWarningsMean":25.5,"maxOptSamePenaltyAsBalanced":"10/10","components":{"facultyGapsPenalty":[0,0],"facultyConsecutivePenalty":[0,0],"studentGapsPenalty":[0,82.6],"studentConsecutivePenalty":[692,529.2],"studentWorkloadImbalancePenalty":[636,606.2],"courseDistributionPenalty":[1280,1257],"buildingTravelPenalty":[355,363],"sameSlotEveryDayPenalty":[831,810.3],"roomCapacityFitPenalty":[275,270.8],"facultyPreferenceBonus":[1250,1248.8],"totalPenalty":[2819,2670.3]}}
+E2b {"runs":30,"runsWithHard":19,"codesAfterPhaseB":{"CROSS_COHORT_COLLISION":36},"codesAfterPhaseAOnly":{},"examples":["Cross-cohort collision: Section ME-B has a whole-class lecture (CS334) while subgroups (B1, B2) are scheduled for separate sessions on Monday at ts-6.","Cross-cohort collision: Section CE-B has a whole-class lecture (EC342) while subgroups (B1, B2) are scheduled for separate sessions on Monday at ts-7.","Cross-cohort collision: Section EE-C has a whole-class lecture (CS352) while subgroups (C1, C2) are scheduled for separate sessions on Monday at ts-7.","Cross-cohort collision: Section CE-C has a whole-class lecture (EE345) while subgroups (C1, C2) are scheduled for separate sessions on Monday at ts-6."]}
+E2c [{"profile":"STUDENT_FOCUSED","seed":1337,"penalty":5826,"health":10,"hard":1,"codes":["CROSS_COHORT_COLLISION"],"warnings":34,"canPublish":false,"ms":310.08},{"profile":"FACULTY_FOCUSED","seed":9999,"penalty":2706,"health":10,"hard":1,"codes":["CROSS_COHORT_COLLISION"],"warnings":26,"canPublish":false,"ms":380.7}]
+E3 {
+  candidates: 3,
+  pairwiseOverlapPct: [ 93.07, 94.29, 98.51 ],
+  fastSessions: 736
+}
+E4 {"sections":4,"allocations":36,"sessionHours":92,"rooms":10,"runs":20,"feasibleRuns":20,"totalMsP50":1.18,"totalMsP95":3.13,"compileMsP50":0.71,"searchMsP50":0.42,"backtracksMax":0,"validatorHardMax":0,"sessions":92,"balancedMsP50":48.83}
+E4 {"sections":8,"allocations":72,"sessionHours":184,"rooms":20,"runs":20,"feasibleRuns":20,"totalMsP50":1.11,"totalMsP95":1.81,"compileMsP50":0.41,"searchMsP50":0.65,"backtracksMax":0,"validatorHardMax":0,"sessions":184,"balancedMsP50":73.14}
+E4 {"sections":16,"allocations":144,"sessionHours":368,"rooms":40,"runs":20,"feasibleRuns":20,"totalMsP50":2.29,"totalMsP95":3.36,"compileMsP50":0.96,"searchMsP50":0.97,"backtracksMax":0,"validatorHardMax":0,"sessions":368,"balancedMsP50":174.82}
+E4 {"sections":32,"allocations":288,"sessionHours":736,"rooms":79,"runs":20,"feasibleRuns":20,"totalMsP50":5.25,"totalMsP95":11.38,"compileMsP50":3.09,"searchMsP50":1.92,"backtracksMax":0,"validatorHardMax":0,"sessions":736,"balancedMsP50":273.5}
+E4 {"sections":64,"allocations":576,"sessionHours":1472,"rooms":157,"runs":10,"feasibleRuns":10,"totalMsP50":12.88,"totalMsP95":16.95,"compileMsP50":9.32,"searchMsP50":3.71,"backtracksMax":0,"validatorHardMax":0,"sessions":1472,"balancedMsP50":632.87}
+E4 {"sections":80,"allocations":720,"sessionHours":1840,"crashed":"Maximum call stack size exceeded"}
+C:\Users\sparsh\AppData\Local\Temp\claude\5674887bb466a05c\61d552ff-de2b-475b-be99-172374899bbc\scratchpad\ghrepo\project\src\lib\optimizationEngine.ts:594
+  function solvePhaseA(allocOrderIdx: number): boolean {
+           ^
+
+RangeError: Maximum call stack size exceeded
+    at solvePhaseA (C:\Users\sparsh\AppData\Local\Temp\claude\5674887bb466a05c\61d552ff-de2b-475b-be99-172374899bbc\scratchpad\ghrepo\project\src\lib\optimizationEngine.ts:594:12)
+    at solvePhaseA (C:\Users\sparsh\AppData\Local\Temp\claude\5674887bb466a05c\61d552ff-de2b-475b-be99-172374899bbc\scratchpad\ghrepo\project\src\lib\optimizationEngine.ts:874:25)
+    at solvePhaseA (C:\Users\sparsh\AppData\Local\Temp\claude\5674887bb466a05c\61d552ff-de2b-475b-be99-172374899bbc\scratchpad\ghrepo\project\src\lib\optimizationEngine.ts:874:25)
+    at solvePhaseA (C:\Users\sparsh\AppData\Local\Temp\claude\5674887bb466a05c\61d552ff-de2b-475b-be99-172374899bbc\scratchpad\ghrepo\project\src\lib\optimizationEngine.ts:874:25)
+    at solvePhaseA (C:\Users\sparsh\AppData\Local\Temp\claude\5674887bb466a05c\61d552ff-de2b-475b-be99-172374899bbc\scratchpad\ghrepo\project\src\lib\optimizationEngine.ts:874:25)
+    at solvePhaseA (C:\Users\sparsh\AppData\Local\Temp\claude\5674887bb466a05c\61d552ff-de2b-475b-be99-172374899bbc\scratchpad\ghrepo\project\src\lib\optimizationEngine.ts:874:25)
+    at solvePhaseA (C:\Users\sparsh\AppData\Local\Temp\claude\5674887bb466a05c\61d552ff-de2b-475b-be99-172374899bbc\scratchpad\ghrepo\project\src\lib\optimizationEngine.ts:874:25)
+    at solvePhaseA (C:\Users\sparsh\AppData\Local\Temp\claude\5674887bb466a05c\61d552ff-de2b-475b-be99-172374899bbc\scratchpad\ghrepo\project\src\lib\optimizationEngine.ts:874:25)
+    at solvePhaseA (C:\Users\sparsh\AppData\Local\Temp\claude\5674887bb466a05c\61d552ff-de2b-475b-be99-172374899bbc\scratchpad\ghrepo\project\src\lib\optimizationEngine.ts:874:25)
+    at solvePhaseA (C:\Users\sparsh\AppData\Local\Temp\claude\5674887bb466a05c\61d552ff-de2b-475b-be99-172374899bbc\scratchpad\ghrepo\project\src\lib\optimizationEngine.ts:874:25)
+
+Node.js v22.23.5
+exit=1

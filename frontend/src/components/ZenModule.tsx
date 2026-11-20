@@ -4,7 +4,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { AlertCircle, AlertTriangle, ArrowRight } from "lucide-react";
 import { discoverCompositions, getBankSummary } from "@/lib/api";
-import { MODELS, formula, rangeRegion, type Composition } from "@/lib/chem";
+import { formula, rangeRegion, type Composition } from "@/lib/chem";
+import { useCatalog } from "@/context/CatalogContext";
 import { SPRING, T, staggerStep } from "@/lib/motion";
 import { cToK, fixed, kToC } from "@/lib/units";
 import { useAuth } from "@/context/AuthContext";
@@ -48,7 +49,14 @@ export default function ZenModule() {
   const { token } = useAuth();
   const [targetC, setTargetC] = useState(577); // ≈ 850 K
   const [tolerance, setTolerance] = useState(20);
-  const [model, setModel] = useState("RF");
+  const [pickedModel, setModel] = useState("RF");
+  // Zen screens with one live Tg model at a time (published from the admin portal).
+  // If the picked one is switched off, the default model takes its place.
+  const { modelsFor } = useCatalog();
+  const MODELS = modelsFor("Tg");
+  const model = MODELS.some((m) => m.code === pickedModel)
+    ? pickedModel
+    : ((MODELS.find((m) => m.is_default) ?? MODELS[0])?.code ?? pickedModel);
   const [state, setState] = useState<State>({ kind: "idle" });
   const [hover, setHover] = useState<string | null>(null);
   const [ranges, setRanges] = useState<Ranges | null>(null);
@@ -176,14 +184,15 @@ export default function ZenModule() {
           <Section title="Model">
             <div role="radiogroup" aria-label="Model" className="grid grid-cols-2 gap-2">
               {MODELS.map((m) => {
-                const on = model === m.id;
+                const on = model === m.code;
                 return (
                   <button
                     key={m.id}
                     type="button"
                     role="radio"
                     aria-checked={on}
-                    onClick={() => setModel(m.id)}
+                    title={m.name}
+                    onClick={() => setModel(m.code)}
                     className={`relative isolate rounded-md border px-3 py-2 text-left transition-colors duration-200 ${
                       on ? "border-transparent" : "border-line hover:border-line-strong"
                     }`}
@@ -195,8 +204,10 @@ export default function ZenModule() {
                         className="absolute inset-0 -z-10 rounded-md border border-ink bg-surface-2/60"
                       />
                     )}
-                    <span className="block text-sm font-medium">{m.id}</span>
-                    <span className="num mt-0.5 block text-xs text-ink-3">±{fixed(m.mae)} °C</span>
+                    <span className="block text-sm font-medium">{m.code}</span>
+                    <span className="num mt-0.5 block text-xs text-ink-3">
+                      {m.metrics?.mae !== undefined ? `±${fixed(m.metrics.mae)} °C` : m.name}
+                    </span>
                   </button>
                 );
               })}

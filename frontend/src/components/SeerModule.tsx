@@ -3,14 +3,13 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { AlertCircle, AlertTriangle, ArrowLeft, ArrowRight, X } from "lucide-react";
-import { PERIODIC_ELEMENTS, type ElementData } from "@/data/elements";
+import type { ElementData } from "@/data/elements";
 import { getBankSummary, predictProperties, type CompositionBasis } from "@/lib/api";
 import {
   GLASS_FORMERS,
   MAX_ELEMENTS,
   convertBasis,
   formula,
-  isModelled,
   normalize,
   rangeRegion,
   rebalance,
@@ -21,6 +20,7 @@ import { DURATION, EASE_IN, SPRING, T } from "@/lib/motion";
 import { kToC } from "@/lib/units";
 import { useAuth } from "@/context/AuthContext";
 import { useProject } from "@/context/ProjectContext";
+import { useCatalog } from "@/context/CatalogContext";
 import { Button } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Dialog";
 import { Drawer } from "@/components/ui/Drawer";
@@ -35,14 +35,14 @@ import type { PredictedGlass } from "@/components/seer/report";
 import { ProjectBanner } from "@/components/seer/ProjectBanner";
 import { ProjectModal } from "@/components/seer/ProjectModal";
 
-const ELEMENT_BY_SYMBOL = Object.fromEntries(PERIODIC_ELEMENTS.map((e) => [e.symbol, e]));
+type ElementMap = Record<string, ElementData>;
 
-const getOxideForSymbol = (sym: string, choices: Record<string, string>) =>
-  choices[sym] || ELEMENT_BY_SYMBOL[sym]?.oxide || "";
+const getOxideForSymbol = (bySymbol: ElementMap, sym: string, choices: Record<string, string>) =>
+  choices[sym] || bySymbol[sym]?.oxide || "";
 
-const oxidesFor = (symbols: string[], excluded: string[], choices: Record<string, string> = {}) =>
+const oxidesFor = (bySymbol: ElementMap, symbols: string[], excluded: string[], choices: Record<string, string> = {}) =>
   symbols
-    .map((s) => getOxideForSymbol(s, choices))
+    .map((s) => getOxideForSymbol(bySymbol, s, choices))
     .filter((ox): ox is string => !!ox && !excluded.includes(ox));
 
 type Ranges = Record<string, { min: number; max: number }>;
@@ -54,12 +54,9 @@ const pick = (c: Composition, oxides: string[]): Composition =>
 // Below this an amount shows as 0.0 and counts as zero.
 const ZERO = 0.05;
 
-const ELEMENT_OF_OXIDE = Object.fromEntries(
-  PERIODIC_ELEMENTS.filter((e) => e.oxide).map((e) => [e.oxide as string, e]),
-);
 /** Oxides of glass-forming elements, among the given ones. */
-const formerOxides = (oxides: string[]) =>
-  oxides.filter((ox) => (GLASS_FORMERS as readonly string[]).includes(ELEMENT_OF_OXIDE[ox]?.symbol ?? ""));
+const formerOxides = (ofOxide: ElementMap, oxides: string[]) =>
+  oxides.filter((ox) => (GLASS_FORMERS as readonly string[]).includes(ofOxide[ox]?.symbol ?? ""));
 
 const listText = (items: string[]) =>
   items.length <= 1 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
@@ -87,6 +84,7 @@ const stepVariants = {
 export default function SeerModule() {
   const { token } = useAuth();
   const { activeProject, refreshActiveProject } = useProject();
+  const { elementBySymbol, elementOfOxide, isModelled, modelChoices } = useCatalog();
   const [projectModalOpen, setProjectModalOpen] = useState(false);
 
   const [selected, setSelected] = useState<string[]>([]); // element symbols, in click order
@@ -96,7 +94,7 @@ export default function SeerModule() {
     Mn: "MnO2",
   });
   const [properties, setProperties] = useState<string[]>(["Tg"]);
-  const [model, setModel] = useState("RF");
+  const [pickedModel, setModel] = useState("RF");
   const [basis, setBasis] = useState<CompositionBasis>("mol");
   const [composition, setComposition] = useState<Composition>({}); // in `basis`, sums to 100
   const [mode, setMode] = useState<CompositionMode>("single");
@@ -121,10 +119,19 @@ export default function SeerModule() {
       .catch(() => setRanges(null));
   }, []);
 
-  const allOxides = oxidesFor(selected, [], oxideChoices);
-  const activeOxides = oxidesFor(selected, excluded, oxideChoices);
+  const allOxides = oxidesFor(elementBySymbol, selected, [], oxideChoices);
+  const activeOxides = oxidesFor(elementBySymbol, selected, excluded, oxideChoices);
   const canContinue = activeOxides.length > 0 && properties.length > 0;
   const currentStep = canContinue ? step.n : 1;
+
+  // Which live models can predict this glass (they must accept every chosen oxide).
+  const unmodelled = activeOxides.filter((ox) => !isModelled(ox, properties));
+  const choices = modelChoices(activeOxides, properties);
+  const noSingleModel = activeOxides.length > 0 && properties.length > 0 && unmodelled.length === 0 && choices.length === 0;
+  // The picked model, or the default one when the pick no longer fits the glass.
+  const pickFits = pickedModel === "ALL" ? choices.length > 1 : choices.some((m) => m.code === pickedModel);
+  const model = pickFits ? pickedModel : ((choices.find((m) => m.is_default) ?? choices[0])?.code ?? pickedModel);
+  const modelReady = model === "ALL" ? choices.length > 1 : choices.some((m) => m.code === model);
 
   const isProjectLimitReached = (activeProject?.predictionCount ?? 0) >= 50;
 
@@ -142,9 +149,13 @@ export default function SeerModule() {
   });
   const stale = glasses !== null && resultKey !== requestKey;
   const rowsReady = rows.length > 0 && rows.every((r) => rowValid(r, activeOxides));
-  const formers = formerOxides(activeOxides);
-  const unmodelled = activeOxides.filter((ox) => !isModelled(ox));
-  const canPredict = activeOxides.length > 0 && unmodelled.length === 0 && (mode === "single" || rowsReady) && !isProjectLimitReached;
+  const formers = formerOxides(elementOfOxide, activeOxides);
+  const canPredict =
+    activeOxides.length > 0 &&
+    unmodelled.length === 0 &&
+    modelReady &&
+    (mode === "single" || rowsReady) &&
+    !isProjectLimitReached;
 
   // --- Glass former set to 0 -------------------------------------------------
   // While a pointer is down (dragging a slider), wait for the release before asking,
@@ -246,7 +257,7 @@ export default function SeerModule() {
   ) => {
     setSelected(symbols);
     setExcluded(nextExcluded);
-    setComposition((prev) => rebalance(prev, oxidesFor(symbols, nextExcluded, nextChoices)));
+    setComposition((prev) => rebalance(prev, oxidesFor(elementBySymbol, symbols, nextExcluded, nextChoices)));
     if (symbols.length === 0) setOpen(false);
   };
 
@@ -264,7 +275,7 @@ export default function SeerModule() {
   };
 
   const handleOxideChoiceChange = (sym: string, newOx: string) => {
-    const oldOx = oxideChoices[sym] || ELEMENT_BY_SYMBOL[sym]?.oxide || "";
+    const oldOx = oxideChoices[sym] || elementBySymbol[sym]?.oxide || "";
     const nextChoices = { ...oxideChoices, [sym]: newOx };
     setOxideChoices(nextChoices);
     setComposition((prev) => {
@@ -404,7 +415,7 @@ export default function SeerModule() {
 
       <SelectionBar
         selected={selected}
-        onRemove={(sym) => toggleElement(ELEMENT_BY_SYMBOL[sym])}
+        onRemove={(sym) => toggleElement(elementBySymbol[sym])}
         onClear={() => updateSelection([], [])}
         onContinue={proceed}
         mode={mode}
@@ -574,6 +585,15 @@ export default function SeerModule() {
                       </button>
                     </div>
                   )}
+                  {noSingleModel && (
+                    <div role="note" className="flex items-start gap-2 rounded-md bg-warn-bg px-3 py-2 text-sm text-warn">
+                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+                      <p>
+                        Each of {listText(activeOxides.map(formula))} has a model, but no single model accepts them all
+                        together. Leave one out in step 1 to predict with the rest.
+                      </p>
+                    </div>
+                  )}
                   <AnimatePresence initial={false}>
                     {error && (
                       <motion.p
@@ -632,7 +652,7 @@ export default function SeerModule() {
                   : loading
                   ? "Predicting…"
                   : `Predict${mode === "multiple" ? ` ${rows.length} glass${rows.length === 1 ? "" : "es"}` : ""}${
-                      model === "ALL" ? " with all four" : ` with ${model}`
+                      model === "ALL" ? ` with all ${choices.length}` : ` with ${model}`
                     }`}
                 {!loading && <ArrowRight className="h-4 w-4" aria-hidden />}
                 {/* The button is the progress indicator while the request runs */}
@@ -683,7 +703,7 @@ export default function SeerModule() {
         }
       >
         {zeroAlert && (() => {
-          const names = listText(zeroAlert.oxides.map((ox) => ELEMENT_OF_OXIDE[ox]?.name ?? ox));
+          const names = listText(zeroAlert.oxides.map((ox) => elementOfOxide[ox]?.name ?? ox));
           const many = zeroAlert.oxides.length > 1;
           return zeroAlert.blocking ? (
             <p>

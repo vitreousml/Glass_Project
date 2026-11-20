@@ -3,8 +3,8 @@
 import React from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Check } from "lucide-react";
-import { PERIODIC_ELEMENTS } from "@/data/elements";
-import { MODELS, MOLAR_MASS, PROPERTIES } from "@/lib/chem";
+import { MOLAR_MASS, PROPERTIES } from "@/lib/chem";
+import { useCatalog } from "@/context/CatalogContext";
 import { SPRING, T } from "@/lib/motion";
 import { fixed } from "@/lib/units";
 import { Formula, Tg } from "@/components/ui/Tg";
@@ -73,14 +73,34 @@ export function SetupStep({
   oxideChoices?: Record<string, string>;
   onOxideChoiceChange?: (sym: string, ox: string) => void;
 }) {
+  const { catalog, modelChoices, property, elementBySymbol } = useCatalog();
+  const activeOxides = oxides.filter((ox) => !excluded.includes(ox));
+
+  // Only models that accept every chosen oxide, for every chosen property.
+  const choices = modelChoices(activeOxides, properties);
+  const errorText = (mae: number | undefined, prop: string) => {
+    if (mae === undefined) return "no test error recorded";
+    const p = property(prop);
+    return p?.unit_kind === "temperature" ? `±${fixed(mae, 0)} °C` : `±${fixed(mae, 2)} ${p?.unit ?? ""}`;
+  };
   const modelOptions = [
-    ...MODELS.map((m) => ({ id: m.id, name: m.name, detail: `±${fixed(m.mae, 0)} °C · R² ${m.r2}` })),
-    { id: "ALL", name: "Compare all four", detail: "RF, XGB, KNN and SVM side by side" },
+    ...choices.map((m) => ({
+      id: m.code,
+      name: m.name,
+      detail: `${errorText(m.metrics?.mae, m.property)}${
+        m.metrics?.r2 !== undefined ? ` · R² ${fixed(m.metrics.r2, 3)}` : ""
+      }`,
+    })),
+    ...(choices.length > 1
+      ? [{ id: "ALL", name: `Compare all ${choices.length}`, detail: `${choices.map((m) => m.code).join(", ")} side by side` }]
+      : []),
   ];
+  const livePropertyIds = catalog.properties.map((p) => p.id);
+  const comingSoon = PROPERTIES.filter((p) => !livePropertyIds.includes(p.id));
 
   const multiOxideElements = (selectedElements || [])
-    .map((sym) => PERIODIC_ELEMENTS.find((e) => e.symbol === sym))
-    .filter((e): e is (typeof PERIODIC_ELEMENTS)[0] => !!e && !!e.oxides && e.oxides.length > 1);
+    .map((sym) => elementBySymbol[sym])
+    .filter((e) => !!e && !!e.oxides && e.oxides.length > 1);
 
   return (
     <div className="space-y-6">
@@ -158,7 +178,7 @@ export function SetupStep({
       </Section>
 
       <Section title="Properties" hint="What to predict.">
-        {PROPERTIES.filter((p) => p.available).map((p) => {
+        {catalog.properties.map((p) => {
           const on = properties.includes(p.id);
           return (
             <motion.button
@@ -175,13 +195,13 @@ export function SetupStep({
             >
               <Box on={on} />
               <span className="w-6 text-base font-semibold">{p.id === "Tg" ? <Tg /> : p.id}</span>
-              <span className="flex-1 text-sm">{p.label}</span>
-              <span className="text-xs text-ink-3">shown in °C</span>
+              <span className="flex-1 text-sm">{p.name}</span>
+              <span className="text-xs text-ink-3">{p.unit_kind === "temperature" ? "shown in °C" : p.unit}</span>
             </motion.button>
           );
         })}
         <div className="mt-2 space-y-2">
-          {PROPERTIES.filter((p) => !p.available).map((p) => (
+          {comingSoon.map((p) => (
             <div
               key={p.id}
               role="checkbox"
@@ -199,6 +219,13 @@ export function SetupStep({
       </Section>
 
       <Section title="Model" hint="± is the average error on test glasses the model never saw.">
+        {modelOptions.length === 0 && (
+          <p className="rounded-md bg-warn-bg px-3 py-2 text-sm text-warn">
+            {properties.length === 0
+              ? "Choose a property to see the models for it."
+              : "No single model accepts all of these oxides together. Untick one above to see the models that can."}
+          </p>
+        )}
         <div role="radiogroup" aria-label="Model" className="grid grid-cols-2 gap-2">
           {modelOptions.map((m) => {
             const on = model === m.id;

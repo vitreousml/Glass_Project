@@ -3,8 +3,14 @@
   "configurations": [
     {
       "name": "backend",
-      "runtimeExecutable": "backend/venv/Scripts/uvicorn.exe",
-      "runtimeArgs": ["app.main:app", "--port", "8000", "--app-dir", "backend"],
+      "runtimeExecutable": "backend/venv/Scripts/python.exe",
+      "runtimeArgs": ["-m", "uvicorn", "app.main:app", "--port", "8000", "--app-dir", "backend", "--reload", "--reload-dir", "backend/app"],
+      "port": 8000
+    },
+    {
+      "name": "backend-admin-local",
+      "runtimeExecutable": "backend/venv/Scripts/python.exe",
+      "runtimeArgs": ["backend/scripts/dev_local_admin.py"],
       "port": 8000
     },
     {

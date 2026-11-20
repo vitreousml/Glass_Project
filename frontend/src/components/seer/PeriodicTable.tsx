@@ -1,16 +1,14 @@
 "use client";
 
-import React, { memo, useEffect, useState } from "react";
+import React, { memo, useEffect, useMemo, useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
-import { PERIODIC_ELEMENTS, type ElementData } from "@/data/elements";
+import type { ElementData } from "@/data/elements";
+import { useCatalog } from "@/context/CatalogContext";
 import { formula } from "@/lib/chem";
 import { DURATION, EASE_OUT, SPRING } from "@/lib/motion";
 
 // The entrance wave plays on the first visit per page load only.
 let wavePlayed = false;
-
-// Elements the models accept, in reading order (for arrow-key navigation).
-const SELECTABLE = PERIODIC_ELEMENTS.filter((e) => e.supported).sort((a, b) => a.row - b.row || a.col - b.col);
 
 // Wave timing: cells arrive along the diagonal (row + col), selectable ones last.
 const WAVE_STEP = 0.011;
@@ -24,6 +22,13 @@ export function PeriodicTable({
   onToggle: (el: ElementData) => void;
 }) {
   const reduce = useReducedMotion();
+  // Which elements can be picked comes from the live models (see CatalogContext).
+  const { elements } = useCatalog();
+  // Selectable elements in reading order, for arrow-key navigation.
+  const SELECTABLE = useMemo(
+    () => elements.filter((e) => e.supported).sort((a, b) => a.row - b.row || a.col - b.col),
+    [elements],
+  );
   const [wave] = useState(() => !wavePlayed);
   useEffect(() => {
     wavePlayed = true;
@@ -44,7 +49,7 @@ export function PeriodicTable({
 
   return (
     <div className="pt-grid h-full" role="group" aria-label="Periodic table" onKeyDown={onKeyDown}>
-      {PERIODIC_ELEMENTS.map((el) => (
+      {elements.map((el) => (
         <Cell key={el.number} el={el} selected={selected.includes(el.symbol)} onToggle={onToggle} wave={playWave} />
       ))}
       <Slot row={6} col={3} label="57–71" title="Lanthanides, shown below" wave={playWave} />

@@ -1,0 +1,324 @@
+{
+  "environment": {
+    "node": "v22.23.5",
+    "platform": "Windows_NT 10.0.26300 x64",
+    "cpu": "13th Gen Intel(R) Core(TM) i5-1340P",
+    "cores": 16,
+    "memGB": 15.65
+  },
+  "dataset": {
+    "workingDays": 5,
+    "teachingPeriodsPerDay": 7,
+    "weeklySlots": 35,
+    "faculty": 500,
+    "facultyWithAllocations": 224,
+    "maxFacultyLoad": 5,
+    "rooms": 80,
+    "roomsByType": {
+      "LectureHall": 38,
+      "SeminarRoom": 12,
+      "ComputerLab": 20,
+      "HardwareLab": 10
+    },
+    "sections": 32,
+    "subgroups": 64,
+    "students": 1280,
+    "courses": 80,
+    "allocations": 288,
+    "lectureAllocations": 160,
+    "labAllocations": 128,
+    "weeklySessionHours": 736,
+    "lectureHours": 480,
+    "labHours": 256,
+    "sectionLectureHoursRange": [
+      15,
+      15
+    ],
+    "sectionLabHoursRange": [
+      8,
+      8
+    ]
+  },
+  "phaseBViolations": {
+    "runs": 30,
+    "runsWithHard": 19,
+    "codesAfterPhaseB": {
+      "CROSS_COHORT_COLLISION": 36
+    },
+    "codesAfterPhaseAOnly": {},
+    "examples": [
+      "Cross-cohort collision: Section ME-B has a whole-class lecture (CS334) while subgroups (B1, B2) are scheduled for separate sessions on Monday at ts-6.",
+      "Cross-cohort collision: Section CE-B has a whole-class lecture (EC342) while subgroups (B1, B2) are scheduled for separate sessions on Monday at ts-7.",
+      "Cross-cohort collision: Section EE-C has a whole-class lecture (CS352) while subgroups (C1, C2) are scheduled for separate sessions on Monday at ts-7.",
+      "Cross-cohort collision: Section CE-C has a whole-class lecture (EE345) while subgroups (C1, C2) are scheduled for separate sessions on Monday at ts-6."
+    ]
+  },
+  "dualRoutines": [
+    {
+      "profile": "STUDENT_FOCUSED",
+      "seed": 1337,
+      "penalty": 5826,
+      "health": 10,
+      "hard": 1,
+      "codes": [
+        "CROSS_COHORT_COLLISION"
+      ],
+      "warnings": 34,
+      "canPublish": false,
+      "ms": 349.95
+    },
+    {
+      "profile": "FACULTY_FOCUSED",
+      "seed": 9999,
+      "penalty": 2706,
+      "health": 10,
+      "hard": 1,
+      "codes": [
+        "CROSS_COHORT_COLLISION"
+      ],
+      "warnings": 26,
+      "canPublish": false,
+      "ms": 433.8
+    }
+  ],
+  "scaling": [
+    {
+      "sections": 4,
+      "allocations": 36,
+      "sessionHours": 92,
+      "rooms": 10,
+      "runs": 20,
+      "feasibleRuns": 20,
+      "totalMsP50": 1.08,
+      "totalMsP95": 1.89,
+      "compileMsP50": 0.57,
+      "searchMsP50": 0.48,
+      "backtracksMax": 0,
+      "validatorHardMax": 0,
+      "sessions": 92,
+      "balancedMsP50": 41.9,
+      "balancedCrashes": 0
+    },
+    {
+      "sections": 8,
+      "allocations": 72,
+      "sessionHours": 184,
+      "rooms": 20,
+      "runs": 20,
+      "feasibleRuns": 20,
+      "totalMsP50": 0.88,
+      "totalMsP95": 1.4,
+      "compileMsP50": 0.33,
+      "searchMsP50": 0.52,
+      "backtracksMax": 0,
+      "validatorHardMax": 0,
+      "sessions": 184,
+      "balancedMsP50": 60.5,
+      "balancedCrashes": 0
+    },
+    {
+      "sections": 16,
+      "allocations": 144,
+      "sessionHours": 368,
+      "rooms": 40,
+      "runs": 20,
+      "feasibleRuns": 20,
+      "totalMsP50": 1.55,
+      "totalMsP95": 2.74,
+      "compileMsP50": 0.7,
+      "searchMsP50": 0.72,
+      "backtracksMax": 0,
+      "validatorHardMax": 0,
+      "sessions": 368,
+      "balancedMsP50": 145.1,
+      "balancedCrashes": 0
+    },
+    {
+      "sections": 32,
+      "allocations": 288,
+      "sessionHours": 736,
+      "rooms": 79,
+      "runs": 20,
+      "feasibleRuns": 20,
+      "totalMsP50": 4.32,
+      "totalMsP95": 6.67,
+      "compileMsP50": 2.61,
+      "searchMsP50": 1.89,
+      "backtracksMax": 0,
+      "validatorHardMax": 0,
+      "sessions": 736,
+      "balancedMsP50": 321.22,
+      "balancedCrashes": 0
+    },
+    {
+      "sections": 64,
+      "allocations": 576,
+      "sessionHours": 1472,
+      "rooms": 157,
+      "runs": 10,
+      "feasibleRuns": 10,
+      "totalMsP50": 13.35,
+      "totalMsP95": 33.42,
+      "compileMsP50": 9.83,
+      "searchMsP50": 3.51,
+      "backtracksMax": 0,
+      "validatorHardMax": 0,
+      "sessions": 1472,
+      "balancedMsP50": 588.73,
+      "balancedCrashes": 0
+    },
+    {
+      "sections": 80,
+      "allocations": 720,
+      "sessionHours": 1840,
+      "crashed": "Maximum call stack size exceeded"
+    },
+    {
+      "sections": 96,
+      "allocations": 864,
+      "sessionHours": 2208,
+      "rooms": 236,
+      "runs": 10,
+      "feasibleRuns": 10,
+      "totalMsP50": 29.55,
+      "totalMsP95": 47.54,
+      "compileMsP50": 21.38,
+      "searchMsP50": 7.72,
+      "backtracksMax": 0,
+      "validatorHardMax": 0,
+      "sessions": 2208,
+      "balancedMsP50": 882.57,
+      "balancedCrashes": 0
+    },
+    {
+      "sections": 112,
+      "allocations": 1008,
+      "sessionHours": 2576,
+      "crashed": "Maximum call stack size exceeded"
+    },
+    {
+      "sections": 128,
+      "allocations": 1152,
+      "sessionHours": 2944,
+      "crashed": "Maximum call stack size exceeded"
+    }
+  ],
+  "tightness": [
+    {
+      "lectureRooms": 48,
+      "lectureRoomUtilisationPct": 28.57,
+      "feasible": true,
+      "totalMs": 5.37,
+      "backtracks": 0,
+      "constraintChecks": 26744,
+      "diagnostics": 0,
+      "validatorHard": 0,
+      "status": "Successfully generated 1 feasible, conflict-free timetable candidate(s) in 5.37 ms."
+    },
+    {
+      "lectureRooms": 32,
+      "lectureRoomUtilisationPct": 42.86,
+      "feasible": true,
+      "totalMs": 4.4,
+      "backtracks": 0,
+      "constraintChecks": 26744,
+      "diagnostics": 0,
+      "validatorHard": 0,
+      "status": "Successfully generated 1 feasible, conflict-free timetable candidate(s) in 4.4 ms."
+    },
+    {
+      "lectureRooms": 24,
+      "lectureRoomUtilisationPct": 57.14,
+      "feasible": false,
+      "totalMs": 3023.3,
+      "backtracks": 858596,
+      "constraintChecks": 205117577,
+      "diagnostics": 0,
+      "validatorHard": null,
+      "status": "Search space exhausted within 3000 ms budget without finding 100% hard-constraint solution"
+    },
+    {
+      "lectureRooms": 20,
+      "lectureRoomUtilisationPct": 68.57,
+      "feasible": false,
+      "totalMs": 3009.12,
+      "backtracks": 901323,
+      "constraintChecks": 183747297,
+      "diagnostics": 0,
+      "validatorHard": null,
+      "status": "Search space exhausted within 3000 ms budget without finding 100% hard-constraint solution"
+    },
+    {
+      "lectureRooms": 18,
+      "lectureRoomUtilisationPct": 76.19,
+      "feasible": false,
+      "totalMs": 3006.21,
+      "backtracks": 1007691,
+      "constraintChecks": 187641499,
+      "diagnostics": 0,
+      "validatorHard": null,
+      "status": "Search space exhausted within 3000 ms budget without finding 100% hard-constraint solution"
+    },
+    {
+      "lectureRooms": 16,
+      "lectureRoomUtilisationPct": 85.71,
+      "feasible": false,
+      "totalMs": 3006.64,
+      "backtracks": 939918,
+      "constraintChecks": 161164632,
+      "diagnostics": 0,
+      "validatorHard": null,
+      "status": "Search space exhausted within 3000 ms budget without finding 100% hard-constraint solution"
+    },
+    {
+      "lectureRooms": 15,
+      "lectureRoomUtilisationPct": 91.43,
+      "feasible": false,
+      "totalMs": 3001.87,
+      "backtracks": 947008,
+      "constraintChecks": 183464667,
+      "diagnostics": 0,
+      "validatorHard": null,
+      "status": "Search space exhausted within 3000 ms budget without finding 100% hard-constraint solution"
+    },
+    {
+      "lectureRooms": 14,
+      "lectureRoomUtilisationPct": 97.96,
+      "feasible": false,
+      "totalMs": 3003.3,
+      "backtracks": 867381,
+      "constraintChecks": 182246965,
+      "diagnostics": 0,
+      "validatorHard": null,
+      "status": "Search space exhausted within 3000 ms budget without finding 100% hard-constraint solution"
+    },
+    {
+      "lectureRooms": 13,
+      "lectureRoomUtilisationPct": 105.49,
+      "feasible": false,
+      "totalMs": 3001.68,
+      "backtracks": 914964,
+      "constraintChecks": 180226776,
+      "diagnostics": 0,
+      "validatorHard": null,
+      "status": "Search space exhausted within 3000 ms budget without finding 100% hard-constraint solution"
+    }
+  ],
+  "recovery": {
+    "cancellations": 100,
+    "withAtLeastOneOption": 100,
+    "withFiveOptions": 100,
+    "topScoreRange": [
+      93,
+      93
+    ],
+    "topScoreMean": 93,
+    "latencyMsP50": 1.51,
+    "latencyMsP95": 2.57
+  },
+  "bcrypt": {
+    "cost12MsP50": 279.58,
+    "cost12MsMax": 351.93,
+    "cost10MsP50": 61.31
+  }
+}

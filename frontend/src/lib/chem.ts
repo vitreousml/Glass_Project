@@ -1,4 +1,4 @@
-import type { CompositionBasis } from "@/lib/api";
+import type { Catalog, CompositionBasis } from "@/lib/api";
 
 export type Composition = Record<string, number>;
 
@@ -26,8 +26,28 @@ export const MOLAR_MASS: Record<string, number> = {
   MnO2: 86.936,
 };
 
-/** Oxides the trained models accept. */
-export const isModelled = (ox: string) => (OXIDES as readonly string[]).includes(ox);
+// What the live models accept and how accurate they are. Filled from the server's
+// catalog (see CatalogContext) whenever it changes, so plain helpers like the
+// report builder see newly published models too.
+const MODELLED = new Set<string>(OXIDES);
+const MODEL_INFO: Record<string, { code: string; name: string; mae?: number; r2?: number }> = {};
+
+export function registerCatalogChem(catalog: Catalog) {
+  catalog.oxides.forEach((o) => {
+    if (o.molar_mass) MOLAR_MASS[o.formula] = o.molar_mass;
+  });
+  MODELLED.clear();
+  catalog.oxides.forEach((o) => MODELLED.add(o.formula));
+  catalog.models.forEach((m) => {
+    MODEL_INFO[`${m.property}:${m.code}`] = { code: m.code, name: m.name, mae: m.metrics?.mae, r2: m.metrics?.r2 };
+  });
+}
+
+/** Name and test error of a model, by short code and property. */
+export const modelInfo = (code: string, property = "Tg") => MODEL_INFO[`${property}:${code}`];
+
+/** Oxides the live models accept. */
+export const isModelled = (ox: string) => MODELLED.has(ox);
 
 const SUBSCRIPTS = "₀₁₂₃₄₅₆₇₈₉";
 /** "B2O3" -> "B₂O₃" */
@@ -113,15 +133,11 @@ export function rangeRegion(ranges: Partial<Record<string, { min: number; max: n
   });
 }
 
-// Test-set errors are in K; a difference of 1 K equals 1 °C.
-export const MODELS = [
-  { id: "RF", name: "Random Forest", mae: 14.85, r2: 0.878 },
-  { id: "XGB", name: "XGBoost", mae: 15.75, r2: 0.873 },
-  { id: "KNN", name: "K-nearest neighbours", mae: 17.82, r2: 0.84 },
-  { id: "SVM", name: "Support vector machine", mae: 22.37, r2: 0.785 },
-] as const;
-export const MODEL_BY_ID: Record<string, (typeof MODELS)[number]> = Object.fromEntries(MODELS.map((m) => [m.id, m]));
+// Models come from the server's catalog (useCatalog); test-set errors are in K, and
+// a difference of 1 K equals 1 °C.
 
+// Properties people ask about. Which ones can be predicted comes from the catalog;
+// `available` here is only what the Bank's dataset has.
 export const PROPERTIES = [
   { id: "Tg", label: "Glass transition temperature", available: true },
   { id: "density", label: "Density", available: false },
@@ -146,5 +162,6 @@ export function relevantWarnings(warnings: string[], oxides: string[]): string[]
     const about = all.find((ox) => w.startsWith(`${ox} =`) || w.startsWith(`${ox} `));
     return !about || oxides.includes(about);
   });
-  return Array.from(new Set(out)).map((w) => w.replace(/\b(SiO2|B2O3|Na2O)\b/g, (m) => formula(m)));
+  const names = new RegExp(`\\b(${all.sort((a, b) => b.length - a.length).join("|")})\\b`, "g");
+  return Array.from(new Set(out)).map((w) => w.replace(names, (m) => formula(m)));
 }

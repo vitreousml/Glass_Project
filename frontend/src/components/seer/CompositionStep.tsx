@@ -2,7 +2,7 @@
 
 import React from "react";
 import type { CompositionBasis } from "@/lib/api";
-import { basisLabel, formula, sumOf, toFullMol, type Composition } from "@/lib/chem";
+import { OXIDES, basisLabel, formula, sumOf, toFullMol, type Composition } from "@/lib/chem";
 import { fixed } from "@/lib/units";
 import { Slider } from "@/components/ui/Slider";
 import { NumberField } from "@/components/ui/NumberField";
@@ -28,6 +28,8 @@ export function CompositionStep({
 }) {
   const unit = basisLabel(basis);
   const locked = oxides.length === 1;
+  // The triangle only shows SiO2–B2O3–Na2O glasses; others (from newer models) skip it.
+  const ternary = oxides.every((ox) => (OXIDES as readonly string[]).includes(ox));
 
   return (
     <Section
@@ -50,7 +52,8 @@ export function CompositionStep({
         />
       }
     >
-      <div className="grid grid-cols-[120px_1fr] items-center gap-5">
+      <div className={`grid items-center gap-5 ${ternary ? "grid-cols-[120px_1fr]" : "grid-cols-1"}`}>
+        {ternary && (
         <figure>
           <TernaryDiagram
             point={toFullMol(composition, basis)}
@@ -62,6 +65,7 @@ export function CompositionStep({
             {region.length > 0 ? "dashed: training ranges" : "your glass, mol %"}
           </figcaption>
         </figure>
+        )}
 
         <div className="space-y-2">
           {oxides.map((ox) => {

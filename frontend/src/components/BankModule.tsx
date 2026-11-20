@@ -13,7 +13,8 @@ import {
   Printer,
   X,
 } from "lucide-react";
-import { PERIODIC_ELEMENTS, type ElementData } from "@/data/elements";
+import type { ElementData } from "@/data/elements";
+import { useCatalog } from "@/context/CatalogContext";
 import { queryBankData, type BankQueryResult } from "@/lib/api";
 import {
   MAX_ELEMENTS,
@@ -31,15 +32,6 @@ import { Formula, Tg } from "@/components/ui/Tg";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Box, Section } from "@/components/seer/SetupStep";
 
-const ELEMENT_BY_SYMBOL = Object.fromEntries(PERIODIC_ELEMENTS.map((e) => [e.symbol, e]));
-
-const getOxideForSymbol = (sym: string, choices: Record<string, string>) =>
-  choices[sym] || ELEMENT_BY_SYMBOL[sym]?.oxide || "";
-
-const oxidesFor = (symbols: string[], excluded: string[], choices: Record<string, string> = {}) =>
-  symbols
-    .map((s) => getOxideForSymbol(s, choices))
-    .filter((ox): ox is string => !!ox && !excluded.includes(ox));
 
 /** Max properties the user can select in Bank (max 2). */
 const MAX_BANK_PROPERTIES = 2;
@@ -65,6 +57,14 @@ const stepVariants = {
 
 export default function BankModule() {
   const { token } = useAuth();
+  // Elements and their oxides, including ones added by newly published models.
+  const { elementBySymbol: ELEMENT_BY_SYMBOL } = useCatalog();
+  const getOxideForSymbol = (sym: string, choices: Record<string, string>) =>
+    choices[sym] || ELEMENT_BY_SYMBOL[sym]?.oxide || "";
+  const oxidesFor = (symbols: string[], excluded: string[], choices: Record<string, string> = {}) =>
+    symbols
+      .map((s) => getOxideForSymbol(s, choices))
+      .filter((ox): ox is string => !!ox && !excluded.includes(ox));
 
   // --- Element selection (Periodic table) ---
   const [selected, setSelected] = useState<string[]>([]);
@@ -471,10 +471,11 @@ function BankSetupStep({
   onOxideChoiceChange?: (sym: string, ox: string) => void;
 }) {
   const activeOxides = oxides.filter((ox) => !excluded.includes(ox));
+  const { elementBySymbol } = useCatalog();
 
   const multiOxideElements = (selectedElements || [])
-    .map((sym) => PERIODIC_ELEMENTS.find((e) => e.symbol === sym))
-    .filter((e): e is (typeof PERIODIC_ELEMENTS)[0] => !!e && !!e.oxides && e.oxides.length > 1);
+    .map((sym) => elementBySymbol[sym])
+    .filter((e): e is ElementData => !!e && !!e.oxides && e.oxides.length > 1);
 
   return (
     <div className="space-y-6">
@@ -840,9 +841,8 @@ function BankSelectionBar({
   oxideChoices?: Record<string, string>;
 }) {
   const ready = selected.length > 0;
-  const OXIDE_OF = Object.fromEntries(
-    PERIODIC_ELEMENTS.map((e) => [e.symbol, e.oxide ?? ""])
-  );
+  const { elements } = useCatalog();
+  const OXIDE_OF = Object.fromEntries(elements.map((e) => [e.symbol, e.oxide ?? ""]));
 
   return (
     <div className="border-t border-line pt-3">

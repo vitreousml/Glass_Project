@@ -150,6 +150,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setProfile(p);
         setProfileStatus("ready");
       });
+      // The demo profile lives in this browser; only the server knows if this login may use the
+      // admin portal (on a development machine that allows it). Ask quietly; ignore failures.
+      getProfile(token)
+        .then((p) => {
+          if (!cancelled && p.isAdmin) setProfile((prev) => (prev ? { ...prev, isAdmin: true } : prev));
+        })
+        .catch(() => {});
       return () => {
         cancelled = true;
       };
@@ -247,7 +254,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         } catch {
           // storage blocked: fine for a demo
         }
-        setProfile(local);
+        // Keep what the server said about admin access (never stored in the browser).
+        setProfile((prev) => ({ ...local, isAdmin: prev?.isAdmin }));
         return;
       }
       // Throws with the server's message; the form shows it.

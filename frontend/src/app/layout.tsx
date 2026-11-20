@@ -4,6 +4,7 @@ import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { ProjectProvider } from "@/context/ProjectContext";
+import { CatalogProvider } from "@/context/CatalogContext";
 
 const sans = IBM_Plex_Sans({
   subsets: ["latin"],
@@ -41,7 +42,9 @@ export default function RootLayout({
       <body className="antialiased selection:bg-heat-4 selection:text-ink">
         <ThemeProvider>
           <AuthProvider>
-            <ProjectProvider>{children}</ProjectProvider>
+            <CatalogProvider>
+              <ProjectProvider>{children}</ProjectProvider>
+            </CatalogProvider>
           </AuthProvider>
         </ThemeProvider>
       </body>

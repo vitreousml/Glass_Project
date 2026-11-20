@@ -1,37 +1,30 @@
 """
 ml_adapter.py
 -------------
-Read-only adapter wrapping predict_tg.py.
-Integrates with the frozen /ml module without modifying any professor code.
-Guarantees Kelvin (K) unit reporting and mol % verification.
+Thin layer between the API and the model registry (app/model_registry.py).
+
+Models, supported oxides and properties are no longer listed here: they come
+from the registry, which holds the original four models plus anything an admin
+publishes. The professor's ml/ folder is untouched; the original model files are
+read from it as built-ins.
 """
 
-import os
-import sys
 import hashlib
-from typing import Dict, List, Any, Optional
+import os
+from typing import Any, Dict, List
 
-# Add the ml directory to the python path so predict_tg can be imported
-CURRENT_DIR = os.path.dirname(os.path.abspath(__file__)) # .../backend/app
-BACKEND_DIR = os.path.dirname(CURRENT_DIR)               # .../backend
-PROJECT_ROOT = os.path.dirname(BACKEND_DIR)              # .../Glass_project
+from app import model_registry, oxides
+
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))  # .../backend/app
+BACKEND_DIR = os.path.dirname(CURRENT_DIR)                 # .../backend
+PROJECT_ROOT = os.path.dirname(BACKEND_DIR)                # .../Glass_project
 ML_DIR = os.path.join(PROJECT_ROOT, "ml")
-if ML_DIR not in sys.path:
-    sys.path.insert(0, ML_DIR)
-
-import predict_tg  # Clean read-only import
 
 CONFIRMED_UNIT = "K"
 CONFIRMED_BASIS = "mol %"
-MODELS = ["RF", "XGB", "KNN", "SVM"]
-OXIDE_MAP = {
-    "Si": "SiO2",
-    "B": "B2O3",
-    "Na": "Na2O"
-}
-SUPPORTED_OXIDES = list(OXIDE_MAP.values())
 
-# Molar masses in g/mol, used to turn weight % into mol % (the models were trained on mol %).
+# Molar masses (g/mol) for oxides the screens offer. Any other oxide's molar mass
+# is worked out from its formula (app/oxides.py), so new elements need no entry here.
 MOLAR_MASSES = {
     "SiO2": 60.084,
     "B2O3": 69.620,
@@ -48,11 +41,6 @@ MOLAR_MASSES = {
     "MnO2": 86.936,
 }
 
-# Properties that have trained models. Add an entry here when a new model is ready.
-PROPERTIES = {
-    "Tg": {"name": "Glass transition temperature", "unit": CONFIRMED_UNIT},
-}
-
 EXPECTED_HASHES = {
     "Tg_RF.pkl": "39F888306D108A8948B84B6312E48753D598F3A09AF7B1E1D76620376DBE487F",
     "Tg_XGB.pkl": "95BCE93450D8F54A63F98426C30209542679137FFA8A8CC1CD5884CE0C28FDEF",
@@ -61,7 +49,7 @@ EXPECTED_HASHES = {
 }
 
 def verify_model_checksums() -> Dict[str, bool]:
-    """Verify SHA-256 checksums of model files at startup."""
+    """Verify SHA-256 checksums of the built-in model files at startup."""
     results = {}
     for filename, expected_hash in EXPECTED_HASHES.items():
         file_path = os.path.join(ML_DIR, "models", filename)
@@ -75,78 +63,102 @@ def verify_model_checksums() -> Dict[str, bool]:
         results[filename] = (sha256.hexdigest().upper() == expected_hash)
     return results
 
+# ---------------------------------------------------------------------------
+# What is live, read from the registry
+# ---------------------------------------------------------------------------
+
+def live_codes(prop: str = "Tg") -> List[str]:
+    """Short codes (RF, XGB, ...) of the live models for a property."""
+    return [m["code"] for m in model_registry.live_models(prop)]
+
+def supported_oxides() -> List[str]:
+    """Every oxide at least one live model accepts."""
+    return model_registry.live_oxides()
+
+def available_properties() -> Dict[str, Dict[str, Any]]:
+    """Properties with at least one live model."""
+    return {p["id"]: {"name": p["name"], "unit": p["unit"]} for p in model_registry.catalog()["properties"]}
+
+def molar_mass(oxide: str) -> float:
+    return MOLAR_MASSES.get(oxide) or oxides.molar_mass(oxide)
+
+def __getattr__(name: str):
+    """Old constant names still work, and always reflect what is live right now."""
+    if name == "MODELS":
+        return live_codes("Tg")
+    if name == "SUPPORTED_OXIDES":
+        return supported_oxides()
+    if name == "PROPERTIES":
+        return available_properties()
+    if name == "OXIDE_MAP":
+        return {o["element"]: o["formula"] for o in model_registry.catalog()["oxides"]}
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 def get_elements_metadata():
-    """Return periodic table metadata indicating supported oxides."""
+    """Periodic table metadata: which elements have a live model, and their oxides."""
+    cat = model_registry.catalog()
     return {
-        "supported_elements": ["Si", "B", "Na"],
+        "supported_elements": [o["element"] for o in cat["oxides"]],
         "implicit_matrix_elements": ["O"],
-        "oxide_mapping": OXIDE_MAP,
+        "oxide_mapping": {o["element"]: o["formula"] for o in cat["oxides"]},
         "composition_basis": CONFIRMED_BASIS,
         "target_property": "Tg",
-        "unit": CONFIRMED_UNIT
+        "properties": [p["id"] for p in cat["properties"]],
+        "unit": CONFIRMED_UNIT,
     }
 
 def get_models_metadata() -> List[Dict[str, Any]]:
-    """Return metadata and performance metrics for the 4 ML models."""
-    info_list = []
-    # Metrics from 80/20 test split as verified
-    metrics = {
-        "RF": {"mae": 14.85, "rmse": 21.78, "r2": 0.878, "display_name": "Random Forest"},
-        "XGB": {"mae": 15.75, "rmse": 22.24, "r2": 0.873, "display_name": "XGBoost"},
-        "KNN": {"mae": 17.82, "rmse": 24.98, "r2": 0.840, "display_name": "K-Nearest Neighbors"},
-        "SVM": {"mae": 22.37, "rmse": 28.94, "r2": 0.785, "display_name": "Support Vector Machine"}
-    }
-    for m in MODELS:
-        raw_info = predict_tg.model_info(m)
-        info_list.append({
-            "model_id": m,
-            "display_name": metrics[m]["display_name"],
-            "unit": CONFIRMED_UNIT,
-            "metrics": metrics[m],
-            "feature_min": raw_info.get("best_params", {}),
-            "n_samples": raw_info.get("n_samples", 480)
+    """Metadata and test metrics for every live model."""
+    out = []
+    for m in model_registry.catalog()["models"]:
+        out.append({
+            "model_id": m["code"],
+            "id": m["id"],
+            "display_name": m["name"],
+            "property": m["property"],
+            "unit": m["unit"],
+            "metrics": {**(m.get("metrics") or {}), "display_name": m["name"]},
+            "features": m["features"],
+            "n_samples": m.get("n_samples"),
+            "version": m.get("version"),
+            "is_default": m.get("is_default"),
         })
-    return info_list
+    return out
 
-def predict_single_model(composition: Dict[str, float], model_name: str) -> Dict[str, Any]:
-    """Run prediction on the chosen model out of the 4."""
-    if model_name not in MODELS:
-        raise ValueError(f"Model {model_name} is invalid. Must be one of {MODELS}")
-    
-    # Ensure inputs are mapped to the 3 features (SiO2, B2O3, Na2O)
-    formatted_inputs = {
-        "SiO2": float(composition.get("SiO2", 0.0)),
-        "B2O3": float(composition.get("B2O3", 0.0)),
-        "Na2O": float(composition.get("Na2O", 0.0))
-    }
-    
-    res = predict_tg.predict_tg(formatted_inputs, model_name=model_name)
-    # Enforce verified unit Kelvin
-    res["unit"] = CONFIRMED_UNIT
-    res["composition_basis"] = CONFIRMED_BASIS
-    return res
+def _live_model(model_name: str, prop: str = "Tg") -> Dict[str, Any]:
+    match = next((m for m in model_registry.live_models(prop)
+                  if m["code"] == model_name or m["id"] == model_name), None)
+    if match is None:
+        raise ValueError(f"Model {model_name} is invalid. Must be one of {live_codes(prop)}")
+    return match
 
-def predict_all_models(composition: Dict[str, float]) -> List[Dict[str, Any]]:
-    """Run prediction across all 4 models."""
-    results = []
-    for m in MODELS:
-        results.append(predict_single_model(composition, m))
-    return results
+def predict_single_model(composition: Dict[str, float], model_name: str, prop: str = "Tg") -> Dict[str, Any]:
+    """Predict with one live model (by short code or id). Missing oxides count as 0."""
+    return model_registry.predict(_live_model(model_name, prop), composition)
 
-def get_zen_grid_config(model_name: str = "RF", step: float = 2.5) -> Dict[str, Any]:
+def predict_all_models(composition: Dict[str, float], prop: str = "Tg") -> List[Dict[str, Any]]:
+    """Predict with every live model for a property."""
+    return [model_registry.predict(m, composition) for m in model_registry.live_models(prop)]
+
+def get_zen_grid_config(model_name: str = "", step: float = 2.5) -> Dict[str, Any]:
     """
-    Returns oxide features and training bounds for Zen grid search,
-    derived entirely from the model bundle — nothing hardcoded.
-    When an admin updates the ML bundle, Zen automatically picks it up.
+    Oxide features and training bounds for the Zen grid search, taken from the
+    model's registry record (read from its bundle at upload). With no model name,
+    the default Tg model is used.
     """
-    bundle = predict_tg.load_model(model_name)
-    features: List[str] = bundle["features"]          # e.g. ["SiO2","B2O3","Na2O"]
-    feature_min: Dict[str, float] = bundle["feature_min"]
-    feature_max: Dict[str, float] = bundle["feature_max"]
+    if model_name:
+        m = _live_model(model_name)
+    else:
+        cat = model_registry.catalog()
+        default = next((x for x in cat["models"] if x["property"] == "Tg" and x["is_default"]), None)
+        if default is None:
+            raise ValueError("No live model for Tg.")
+        m = _live_model(default["id"])
+    features: List[str] = m["features"]
     bounds: Dict[str, Dict[str, float]] = {}
     for feat in features:
-        lo = max(0.0, float(feature_min.get(feat, 0.0)))
-        hi = min(100.0, float(feature_max.get(feat, 100.0)))
+        lo = max(0.0, float(m["feature_min"].get(feat, 0.0)))
+        hi = min(100.0, float(m["feature_max"].get(feat, 100.0)))
         bounds[feat] = {"min": round(lo, 2), "max": round(hi, 2)}
     return {"features": features, "bounds": bounds, "step": step}
 
@@ -155,16 +167,11 @@ def wt_to_mol_percent(composition: Dict[str, float]) -> Dict[str, float]:
     Convert an oxide composition from weight % to mol %.
     Each oxide's moles = weight / molar mass; the result is rescaled to sum to 100.
     """
-    moles = {ox: float(w) / MOLAR_MASSES[ox] for ox, w in composition.items()}
+    moles = {ox: float(w) / molar_mass(ox) for ox, w in composition.items()}
     total = sum(moles.values())
     if total <= 0:
         raise ValueError("Composition must contain at least one oxide above 0.")
     return {ox: 100.0 * n / total for ox, n in moles.items()}
-
-# One prediction function per property; all of them return values in Kelvin.
-PREDICTORS = {
-    "Tg": predict_single_model,
-}
 
 # ---------------------------------------------------------------------------
 # Bank data-query helpers

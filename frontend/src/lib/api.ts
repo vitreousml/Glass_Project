@@ -2,15 +2,19 @@ import { auth } from "./firebase";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
-async function call(path: string, init: { method?: string; body?: string } = {}, token?: string | null) {
+async function authHeader(token?: string | null): Promise<Record<string, string>> {
   // Signed in with Google? Ask Firebase for a fresh token (it renews them automatically).
   // Otherwise use the token we were given (the dev login).
   const idToken = auth.currentUser ? await auth.currentUser.getIdToken() : token;
+  return idToken ? { Authorization: `Bearer ${idToken}` } : {};
+}
+
+async function call(path: string, init: { method?: string; body?: string } = {}, token?: string | null) {
   const res = await fetch(API + path, {
     ...init,
     headers: {
       "Content-Type": "application/json",
-      ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+      ...(await authHeader(token)),
     },
   });
   const data = await res.json().catch(() => ({}));
@@ -62,6 +66,8 @@ export interface UserProfile {
   course?: string;
   profileComplete: boolean;
   recorded: boolean;
+  /** Shows the Admin screen. The server checks the role again on every admin request. */
+  isAdmin?: boolean;
 }
 
 export const getProfile = (token: string | null): Promise<UserProfile> => call("/api/v1/auth/profile", {}, token);
@@ -157,3 +163,206 @@ export const discoverCompositions = (targetTg: number, tolerance: number, model:
     method: "POST",
     body: JSON.stringify({ target_tg: targetTg, tolerance, model_name: model }),
   }, token);
+
+// ---------------------------------------------------------------------------
+// Catalog: what is live right now (models, properties, oxides). Every page reads this.
+// ---------------------------------------------------------------------------
+
+export interface ModelMetrics {
+  mae?: number;
+  rmse?: number;
+  r2?: number;
+}
+
+export interface CatalogModel {
+  id: string;
+  /** "Tg:RF": the property and short code. Versions of one model share it. */
+  family: string;
+  code: string;
+  name: string;
+  description?: string;
+  property: string;
+  unit: string;
+  features: string[];
+  feature_min: Record<string, number>;
+  feature_max: Record<string, number>;
+  metrics: ModelMetrics;
+  n_samples?: number | null;
+  trained_on?: string | null;
+  version: number;
+  builtin?: boolean;
+  is_default?: boolean;
+  published_at?: string;
+  estimator?: string | null;
+}
+
+export interface CatalogProperty {
+  id: string;
+  name: string;
+  unit: string;
+  unit_kind: "temperature" | "other";
+  default_model: string | null;
+}
+
+export interface CatalogOxide {
+  formula: string;
+  element: string | null;
+  element_name: string | null;
+  molar_mass: number | null;
+  properties?: string[];
+}
+
+export interface Catalog {
+  version: number;
+  properties: CatalogProperty[];
+  models: CatalogModel[];
+  oxides: CatalogOxide[];
+}
+
+export const getCatalog = (): Promise<Catalog> => call("/api/v1/catalog");
+export const getCatalogVersion = (): Promise<{ version: number }> => call("/api/v1/catalog/version");
+
+// ---------------------------------------------------------------------------
+// Admin portal
+// ---------------------------------------------------------------------------
+
+export type CheckStatus = "pass" | "warn" | "fail" | "skip";
+export interface UploadCheck {
+  id: string;
+  label: string;
+  status: CheckStatus;
+  detail: string;
+}
+
+export type ModelStatus = "ready" | "live" | "archived";
+
+export interface AdminModel extends CatalogModel {
+  status: ModelStatus;
+  checks: UploadCheck[];
+  file: { storage: string; path: string; sha256: string; size: number; original_name: string };
+  property_name?: string | null;
+  new_oxides?: string[];
+  library_versions?: Record<string, string>;
+  created_at?: string;
+  created_by?: string;
+  published_by?: string;
+  archived_at?: string;
+  archived_by?: string;
+  replaced_by?: string;
+  /** Display order: the original four first, then uploads in the order they arrived. */
+  order?: number;
+}
+
+export interface AdminProperty {
+  id: string;
+  name: string;
+  unit: string;
+  unit_kind?: string;
+  default_family?: string | null;
+  plausible_min?: number | null;
+  plausible_max?: number | null;
+}
+
+export interface AdminOverview {
+  version: number;
+  models: AdminModel[];
+  properties: AdminProperty[];
+  live_oxides: CatalogOxide[];
+  server_versions: Record<string, string>;
+  max_upload_mb: number;
+}
+
+export interface UploadInfo {
+  code: string;
+  name: string;
+  estimator?: string | null;
+  property: string;
+  property_exists: boolean;
+  unit: string;
+  features: string[];
+  metrics: ModelMetrics;
+  n_samples?: number | null;
+  new_oxides: CatalogOxide[];
+  oxides: CatalogOxide[];
+}
+
+export interface UploadResult {
+  status: "ready" | "failed";
+  checks: UploadCheck[];
+  info: UploadInfo | null;
+  model?: AdminModel;
+}
+
+export interface TryPrediction {
+  model: string;
+  model_name: string;
+  value: number;
+  unit: string;
+  warnings: string[];
+}
+
+export interface TryResult {
+  result: TryPrediction;
+  compare: TryPrediction[];
+}
+
+export interface AuditEntry {
+  id: string;
+  at: string;
+  action: "upload" | "edit" | "publish" | "restore" | "archive" | "default" | "discard";
+  actor: string;
+  model_id?: string | null;
+  model_name?: string | null;
+  family?: string | null;
+  summary: string;
+}
+
+export const adminGetModels = (token: string | null): Promise<AdminOverview> =>
+  call("/api/v1/admin/models", {}, token);
+
+export async function adminUpload(file: File, token: string | null): Promise<UploadResult> {
+  const form = new FormData();
+  form.append("file", file);
+  // No Content-Type header: the browser sets the multipart boundary itself.
+  const res = await fetch(API + "/api/v1/admin/models/upload", {
+    method: "POST",
+    body: form,
+    headers: await authHeader(token),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.detail || `Server error ${res.status}`);
+  return data;
+}
+
+export const adminEditModel = (
+  id: string,
+  fields: Partial<{ name: string; description: string; code: string; property_name: string; unit: string }>,
+  token: string | null,
+): Promise<AdminModel> => call(`/api/v1/admin/models/${id}`, { method: "PATCH", body: JSON.stringify(fields) }, token);
+
+export const adminTryModel = (
+  id: string,
+  composition: Record<string, number>,
+  basis: CompositionBasis,
+  token: string | null,
+): Promise<TryResult> =>
+  call(
+    `/api/v1/admin/models/${id}/try`,
+    { method: "POST", body: JSON.stringify({ composition, composition_basis: basis }) },
+    token,
+  );
+
+export const adminPublish = (id: string, token: string | null): Promise<AdminModel> =>
+  call(`/api/v1/admin/models/${id}/publish`, { method: "POST" }, token);
+
+export const adminArchive = (id: string, confirm: boolean, token: string | null): Promise<AdminModel> =>
+  call(`/api/v1/admin/models/${id}/archive`, { method: "POST", body: JSON.stringify({ confirm }) }, token);
+
+export const adminSetDefault = (id: string, token: string | null): Promise<AdminModel> =>
+  call(`/api/v1/admin/models/${id}/default`, { method: "POST" }, token);
+
+export const adminDiscard = (id: string, token: string | null): Promise<{ success: boolean }> =>
+  call(`/api/v1/admin/models/${id}`, { method: "DELETE" }, token);
+
+export const adminAudit = (token: string | null, limit = 100): Promise<{ entries: AuditEntry[] }> =>
+  call(`/api/v1/admin/audit?limit=${limit}`, {}, token);

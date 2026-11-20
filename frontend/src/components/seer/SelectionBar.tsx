@@ -3,7 +3,7 @@
 import React from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { AlertCircle, ArrowRight, X } from "lucide-react";
-import { PERIODIC_ELEMENTS } from "@/data/elements";
+import { useCatalog } from "@/context/CatalogContext";
 import { formula } from "@/lib/chem";
 import { EASE_OUT, SPRING, T } from "@/lib/motion";
 import { Button } from "@/components/ui/Button";
@@ -11,7 +11,6 @@ import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
 
 export type CompositionMode = "single" | "multiple";
 
-const OXIDE_OF = Object.fromEntries(PERIODIC_ELEMENTS.map((e) => [e.symbol, e.oxide ?? ""]));
 
 // Continue "wakes up" once, the moment it becomes available.
 const wake = {
@@ -40,6 +39,10 @@ export function SelectionBar({
   oxideChoices?: Record<string, string>;
 }) {
   const ready = selected.length > 0;
+  const { elementBySymbol, catalog } = useCatalog();
+  const OXIDE_OF = (sym: string) => elementBySymbol[sym]?.oxide ?? "";
+  // Elements a live model accepts, from the catalog.
+  const modelled = Array.from(new Set(catalog.oxides.map((o) => o.element).filter((e): e is string => !!e)));
 
   return (
     <div className="border-t border-line pt-3">
@@ -55,8 +58,13 @@ export function SelectionBar({
               exit={{ opacity: 0, transition: T.exit }}
             >
               Select the elements in your glass, up to 5. The models cover{" "}
-              <strong className="font-semibold text-ink">Si</strong>, <strong className="font-semibold text-ink">B</strong>{" "}
-              and <strong className="font-semibold text-ink">Na</strong>; dashed glass formers have no model yet.
+              {modelled.map((sym, i) => (
+                <React.Fragment key={sym}>
+                  {i > 0 && (i === modelled.length - 1 ? " and " : ", ")}
+                  <strong className="font-semibold text-ink">{sym}</strong>
+                </React.Fragment>
+              ))}
+              ; dashed glass formers have no model yet.
             </motion.span>
           ) : (
             selected.map((sym) => (
@@ -73,7 +81,7 @@ export function SelectionBar({
                 <span className="text-ink-3" aria-hidden>
                   →
                 </span>
-                <span>{formula(oxideChoices[sym] || OXIDE_OF[sym])}</span>
+                <span>{formula(oxideChoices[sym] || OXIDE_OF(sym))}</span>
                 <button
                   type="button"
                   onClick={() => onRemove(sym)}

@@ -1,0 +1,241 @@
+[test-server] [SUPABASE] Running in autonomous authoritative PostgreSQL emulation mode (configured schema ready for live cutover)
+[test-server] [SUPABASE STORE] Relational master dataset successfully initialized.
+[test-server] [MAILER NOTICE] No email provider configured in development. Links will be printed to server console.
+[test-server] [SUPABASE AUTH] Service role key missing; operating in local mode.
+[test-server] [STARTUP] HTTP SERVER LISTENING { port: 3100, address: '0.0.0.0' }
+TAP version 13
+# Subtest: Security Headers and Strict CSP enforcement
+ok 1 - Security Headers and Strict CSP enforcement
+  ---
+  duration_ms: 47.8421
+  type: 'test'
+  ...
+# Subtest: Cookie-only session: login and demo-login do not expose token in JSON body
+ok 2 - Cookie-only session: login and demo-login do not expose token in JSON body
+  ---
+  duration_ms: 33.6718
+  type: 'test'
+  ...
+# Subtest: CSRF protection: state-changing request with forbidden origin is rejected with 403
+ok 3 - CSRF protection: state-changing request with forbidden origin is rejected with 403
+  ---
+  duration_ms: 5.9162
+  type: 'test'
+  ...
+# Subtest: schedules every allocated hour with zero hard violations
+ok 4 - schedules every allocated hour with zero hard violations
+  ---
+  duration_ms: 30.924
+  type: 'test'
+  ...
+# Subtest: local search lowers the soft penalty and keeps hard constraints
+ok 5 - local search lowers the soft penalty and keeps hard constraints
+  ---
+  duration_ms: 331.3163
+  type: 'test'
+  ...
+# Subtest: health score is not pinned to a floor at realistic size
+ok 6 - health score is not pinned to a floor at realistic size
+  ---
+  duration_ms: 10.6556
+  type: 'test'
+  ...
+# Subtest: candidates are genuinely different and the seed matters, yet runs are deterministic
+ok 7 - candidates are genuinely different and the seed matters, yet runs are deterministic
+  ---
+  duration_ms: 60.5955
+  type: 'test'
+  ...
+# Subtest: an odd-hour lab is scheduled instead of failing the whole run
+ok 8 - an odd-hour lab is scheduled instead of failing the whole run
+  ---
+  duration_ms: 12.4008
+  type: 'test'
+  ...
+# Subtest: faculty protected slots are never used, including after local search
+ok 9 - faculty protected slots are never used, including after local search
+  ---
+  duration_ms: 512.4832
+  type: 'test'
+  ...
+# Subtest: locked sessions stay exactly where they were pinned
+ok 10 - locked sessions stay exactly where they were pinned
+  ---
+  duration_ms: 20.455
+  type: 'test'
+  ...
+# Subtest: impossible input is reported with a diagnostic, not a silent failure
+ok 11 - impossible input is reported with a diagnostic, not a silent failure
+  ---
+  duration_ms: 5.884
+  type: 'test'
+  ...
+# Subtest: Registration signs in without email verification; password-reset tokens remain purpose-bound
+ok 12 - Registration signs in without email verification; password-reset tokens remain purpose-bound
+  ---
+  duration_ms: 609.1961
+  type: 'test'
+  ...
+# Subtest: Password hashing and verification with bcrypt
+ok 13 - Password hashing and verification with bcrypt
+  ---
+  duration_ms: 673.1656
+  type: 'test'
+  ...
+# Subtest: Password verification with old bcrypt cost (needs rehash)
+ok 14 - Password verification with old bcrypt cost (needs rehash)
+  ---
+  duration_ms: 111.8222
+  type: 'test'
+  ...
+# Subtest: Password hashing and verification with scrypt
+ok 15 - Password hashing and verification with scrypt
+  ---
+  duration_ms: 117.4522
+  type: 'test'
+  ...
+# Subtest: Password hashing and verification with legacy SHA-256
+ok 16 - Password hashing and verification with legacy SHA-256
+  ---
+  duration_ms: 0.4958
+  type: 'test'
+  ...
+# Subtest: Password verification rejects malformed hashes without throwing
+ok 17 - Password verification rejects malformed hashes without throwing
+  ---
+  duration_ms: 38.3133
+  type: 'test'
+  ...
+# Subtest: Password length is capped at 128 characters
+ok 18 - Password length is capped at 128 characters
+  ---
+  duration_ms: 221.7613
+  type: 'test'
+  ...
+# Subtest: Persistent store token, session, and rate-limit persistence and TTL
+ok 19 - Persistent store token, session, and rate-limit persistence and TTL
+  ---
+  duration_ms: 1.9741
+  type: 'test'
+  ...
+# Subtest: FileBackend writes state safely and atomically
+ok 20 - FileBackend writes state safely and atomically
+  ---
+  duration_ms: 1.8427
+  type: 'test'
+  ...
+# Subtest: PersistentStore in production refuses to boot without Postgres configured
+ok 21 - PersistentStore in production refuses to boot without Postgres configured
+  ---
+  duration_ms: 0.4798
+  type: 'test'
+  ...
+# Subtest: Duplicate registration cannot replace a created account password
+ok 22 - Duplicate registration cannot replace a created account password
+  ---
+  duration_ms: 702.3437
+  type: 'test'
+  ...
+# Subtest: ALLOW_TEST_RESET_TOKEN test harness security and production isolation
+ok 23 - ALLOW_TEST_RESET_TOKEN test harness security and production isolation
+  ---
+  duration_ms: 105.1294
+  type: 'test'
+  ...
+# [TIMING TEST] forgot-password mean existing: 3.78ms, non-existing: 1.06ms, diff: 2.72ms
+# [TIMING TEST] resend-verification mean existing: 4.71ms, non-existing: 0.92ms, diff: 3.80ms
+# Subtest: Timing side-channel mitigation for anti-enumeration endpoints
+ok 24 - Timing side-channel mitigation for anti-enumeration endpoints
+  ---
+  duration_ms: 315.9218
+  type: 'test'
+  ...
+1..24
+# tests 24
+# suites 0
+# pass 24
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 5877.977
+================================================================
+INTELLISCHEDULE INDEPENDENT SECURITY & PERFORMANCE AUDIT SUITE
+================================================================
+
+--- 0. Testing Monitoring & Health Checks ---
+  ✓ [PASS] [Health Check] Liveness check /api/health/live returns HTTP 200 LIVE
+  ✓ [PASS] [Health Check] Readiness check /api/health/ready returns HTTP 200 READY
+
+--- 1. Testing Bcrypt/Scrypt KDF & Password Migration Security ---
+  ✓ [PASS] [Password Hashing] Bcrypt KDF generates standard Blowfish formatted hash: $2b$12$<salt><hash>
+  ✓ [PASS] [Password Hashing] Bcrypt verification confirms valid password without needing rehash
+  ✓ [PASS] [Password Hashing] Scrypt verification confirms valid password and flags for upgrade to standard bcrypt
+  ✓ [PASS] [Password Hashing] Bcrypt verification rejects incorrect password
+  ✓ [PASS] [Password Hashing] Legacy salted SHA-256 is correctly verified and flagged for transparent on-the-fly rehash upgrade
+
+--- 2. Testing Authentication & RBAC APIs ---
+  ✓ [PASS] [Auth API] Empty credentials return HTTP 400
+  ✓ [PASS] [Auth API] Invalid password returns HTTP 401
+  ✓ [PASS] [Auth API] Nonexistent user returns HTTP 401 with generic message
+  ✓ [PASS] [Auth API] Coordinator login resolves role and multi-workspaces [Coordinator, Faculty]
+  ✓ [PASS] [Auth API] Student login resolves CR multi-workspace authorization
+  ✓ [PASS] [Auth API] Session verification /api/auth/me validates session cookie and returns user profile
+  ✓ [PASS] [Auth API] Unauthenticated /api/auth/me returns HTTP 401
+  ✓ [PASS] [Auth API] Weak password "password" rejected by institutional password policy (HTTP 400)
+  ✓ [PASS] [Auth API] Weak password "Password" rejected by institutional password policy (HTTP 400)
+  ✓ [PASS] [Auth API] Weak password "Password123" rejected by institutional password policy (HTTP 400)
+  ✓ [PASS] [Auth API] Weak password "password123!" rejected by institutional password policy (HTTP 400)
+  ✓ [PASS] [Auth API] Weak password "PASSWORD123!" rejected by institutional password policy (HTTP 400)
+  ✓ [PASS] [Auth API] Unauthorized email domain (@gmail.com) rejected with HTTP 400
+  ✓ [PASS] [Auth API] Institutional @thapar.edu registration accepted with HTTP 201 Created
+  ✓ [PASS] [Auth API] Unauthorized external email domain (@stanford.edu) rejected with HTTP 400
+  ✓ [PASS] [Auth API] New user registration succeeds without automatic login token (explicit login required)
+  ✓ [PASS] [Auth API] Registration does not create authenticated session or auto-login the user
+  ✓ [PASS] [Auth API] Newly registered account rejects wrong password with HTTP 401
+  ✗ [FAIL] [Auth API] Unconfirmed newly registered account is rejected with HTTP 401 until email verification: Assertion failed
+  ✓ [PASS] [Auth API] Invalid verification token rejected with HTTP 400
+  ✓ [PASS] [Auth API] Duplicate registration handled safely with HTTP 201 generic response
+  ✓ [PASS] [Auth API] Password reset request succeeds
+  ✓ [PASS] [Auth API] Reset token validation rejects invalid token
+  ✓ [PASS] [Auth API] Weak password reset rejected by password policy
+  ✓ [PASS] [Auth API] Password reset rejects invalid token
+  ✓ [PASS] [Auth API] Logout endpoint revokes session
+  ✓ [PASS] [Auth API] Revoked session cannot access /api/auth/me
+
+--- 3. Testing Google OAuth 2.0 Security & Status ---
+  ✓ [PASS] [Google OAuth] Status endpoint returns valid provider information
+[test-server] !!! API 404 Handler caught request !!! /api/auth/google/debug
+  ✓ [PASS] [Google OAuth] Google debug endpoint is removed from the public API surface
+  ✓ [PASS] [Google OAuth] Authorization initiation endpoint safely responds with structured JSON
+  ✓ [PASS] [Google OAuth] User cancellation or denial handled safely without session creation
+  ✓ [PASS] [Google OAuth] Missing code and state parameters safely rejected with HTTP 400
+  ✓ [PASS] [Google OAuth] Unregistered/expired state token safely rejected with HTTP 400
+  ✓ [PASS] [Google OAuth] Google button has type="button" and is strictly outside the email/password form (Enter-key isolation)
+
+--- 4. Testing Timetable Engine & Constraint Solvers ---
+  ✓ [PASS] [Timetable Engine] Hard Constraint: Detects simultaneous teacher conflict across different sections
+  ✓ [PASS] [Timetable Engine] Hard Constraint: Detects room double-booking conflict
+  ✓ [PASS] [Timetable Engine] Hard Constraint: Detects student section simultaneous class collision
+  ✓ [PASS] [Timetable Engine] Hard Constraint: Rejects room assignment with insufficient seating capacity
+  ✓ [PASS] [Timetable Engine] Master generator successfully creates 736 conflict-free class sessions (736 scheduled hours)
+
+--- 5. Testing Master Data Validation & Diagnostics ---
+  ✓ [PASS] [Master Data Validation] Valid academic setup passes pre-generation audit with 0 errors
+  ✓ [PASS] [Master Data Validation] Pre-generation audit blocks generation when zero working days are configured
+  ✓ [PASS] [Master Data Validation] Pre-generation audit blocks generation when zero course allocations are assigned
+
+--- 6. Testing Timetable Review Views & Relationship Integrity ---
+  ✓ [PASS] [Timetable Review] Section CSE-A view resolves 23 sessions with complete relational mappings (Course, Room, Faculty, TimeSlot)
+  ✓ [PASS] [Timetable Review] Faculty Prof. Arvind Sharma view resolves 3 teaching assignments without collisions
+  ✓ [PASS] [Timetable Review] Room LT-101 schedule resolves 21 non-overlapping bookings
+
+--- 7. Empirical Performance Benchmarks (p50, p95, p99) ---
+  ✓ [PASS] [Performance Benchmark] API /api/health/live Latency: p50 = 0.47 ms, p95 = 1.39 ms, p99 = 1.58 ms (Threshold: p95 < 25 ms)
+  ✓ [PASS] [Performance Benchmark] Constraint Solver Speed: p50 = 7.19 ms, p95 = 16.24 ms, p99 = 16.58 ms (Threshold: p95 < 50 ms)
+
+================================================================
+TOTAL TESTS: 54 | PASSED: 53 | FAILED: 1
+================================================================
+
+exit=1

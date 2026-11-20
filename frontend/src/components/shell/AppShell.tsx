@@ -10,6 +10,7 @@ import {
   UserRound,
   FolderKanban,
   Lock,
+  ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
@@ -22,8 +23,9 @@ import SeerModule from "@/components/SeerModule";
 import BankModule from "@/components/BankModule";
 import ZenModule from "@/components/ZenModule";
 import ProfileModule from "@/components/ProfileModule";
+import AdminModule from "@/components/AdminModule";
 
-type ScreenId = "projects" | "seer" | "bank" | "zen" | "profile";
+type ScreenId = "projects" | "seer" | "bank" | "zen" | "profile" | "admin";
 
 const SCREENS: {
   id: ScreenId;
@@ -31,12 +33,14 @@ const SCREENS: {
   verb: string;
   icon: LucideIcon;
   requiresProject?: boolean;
+  adminOnly?: boolean;
 }[] = [
   { id: "projects", name: "Projects", verb: "Home", icon: FolderKanban },
   { id: "seer", name: "Seer", verb: "Predict", icon: Thermometer, requiresProject: true },
   { id: "bank", name: "Bank", verb: "Explore", icon: Triangle, requiresProject: true },
   { id: "zen", name: "Zen", verb: "Discover", icon: Crosshair, requiresProject: true },
   { id: "profile", name: "Profile", verb: "Account", icon: UserRound },
+  { id: "admin", name: "Admin", verb: "Models", icon: ShieldCheck, adminOnly: true },
 ];
 
 const order = (id: ScreenId) => SCREENS.findIndex((s) => s.id === id);
@@ -49,7 +53,9 @@ const screenVariants = {
 };
 
 export function AppShell() {
-  const { user, logout } = useAuth();
+  const { user, logout, profile } = useAuth();
+  // The Admin screen only shows for admins; the server checks the role again on every request.
+  const screens = SCREENS.filter((s) => !s.adminOnly || profile?.isAdmin);
   const { activeProject } = useProject();
   const [screen, setScreen] = useState<{ id: ScreenId; dir: number }>({
     id: activeProject ? "seer" : "projects",
@@ -72,7 +78,7 @@ export function AppShell() {
   useEffect(() => {
     const handler = (e: any) => {
       const target = e.detail;
-      if (target && ["projects", "seer", "bank", "zen", "profile"].includes(target)) {
+      if (target && screens.some((s) => s.id === target)) {
         go(target as ScreenId);
       }
     };
@@ -105,7 +111,7 @@ export function AppShell() {
         </div>
 
         <nav aria-label="Screens" className="flex flex-1 items-center justify-center gap-1 md:flex-none md:flex-col md:items-stretch">
-          {SCREENS.map((s) => {
+          {screens.map((s) => {
             const on = s.id === screen.id;
             const Icon = s.icon;
             const isLocked = s.requiresProject && !activeProject;
@@ -216,6 +222,7 @@ export function AppShell() {
             {screen.id === "bank" && <BankModule />}
             {screen.id === "zen" && <ZenModule />}
             {screen.id === "profile" && <ProfileModule />}
+            {screen.id === "admin" && profile?.isAdmin && <AdminModule />}
           </motion.div>
         </AnimatePresence>
       </main>

@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { AlertTriangle, Download, Printer, HeartHandshake, X } from "lucide-react";
 import type { CompositionBasis } from "@/lib/api";
-import { MODEL_BY_ID, basisLabel, formula, relevantWarnings } from "@/lib/chem";
+import { basisLabel, formula, modelInfo, relevantWarnings } from "@/lib/chem";
 import { downloadCsv, printReport } from "@/lib/export";
 import { DURATION, T, staggerStep, useAnimatedNumber } from "@/lib/motion";
 import { fixed, kToC } from "@/lib/units";
@@ -82,7 +82,7 @@ export function Results({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-semibold">
           Predicted <Tg />
-          {allModels && <span className="font-normal text-ink-2"> · all four models</span>}
+          {allModels && <span className="font-normal text-ink-2"> · {tgOf(glasses[0]).length} models</span>}
         </h3>
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="sm" onClick={handleCsvDownload} disabled={stale}>
@@ -134,11 +134,13 @@ export function Results({
       </AnimatePresence>
 
       <div className={`transition-[filter,opacity] duration-200 ${stale ? "opacity-55 grayscale" : ""}`}>
-        {multiple ? (
-          <MultiTable glasses={glasses} oxides={oxides} basis={basis} />
-        ) : (
-          <SingleResult glass={glasses[0]} oxides={oxides} rangeC={rangeC} />
-        )}
+        {tgOf(glasses[0]).length > 0 &&
+          (multiple ? (
+            <MultiTable glasses={glasses} oxides={oxides} basis={basis} />
+          ) : (
+            <SingleResult glass={glasses[0]} oxides={oxides} rangeC={rangeC} />
+          ))}
+        <OtherProperties glasses={glasses} multiple={multiple} />
       </div>
 
       {glasses[0]?.response?.project_name && (
@@ -182,6 +184,46 @@ export function Results({
   );
 }
 
+/** Properties other than Tg (added through the admin portal): each model's value in its own unit. */
+function OtherProperties({ glasses, multiple }: { glasses: PredictedGlass[]; multiple: boolean }) {
+  const rows = glasses.flatMap((g, i) =>
+    g.response.results
+      .filter((r) => !(r.property === "Tg" && r.unit === "K"))
+      .map((r) => ({ glass: i + 1, ...r })),
+  );
+  if (rows.length === 0) return null;
+  return (
+    <div className="mt-4 overflow-x-auto rounded-md border border-line">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-line text-left text-xs text-ink-3">
+            {multiple && <th className="px-3 py-2 font-medium">Glass</th>}
+            <th className="px-3 py-2 font-medium">Property</th>
+            <th className="px-3 py-2 font-medium">Model</th>
+            <th className="px-3 py-2 text-right font-medium">Predicted</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, k) => {
+            const info = modelInfo(r.model, r.property);
+            return (
+              <tr key={k} className="border-b border-line last:border-0">
+                {multiple && <td className="num px-3 py-2">{r.glass}</td>}
+                <td className="px-3 py-2">{r.property}</td>
+                <td className="px-3 py-2">{info?.name ?? r.model}</td>
+                <td className="num px-3 py-2 text-right">
+                  {fixed(r.value, 3)} {r.unit}
+                  {info?.mae !== undefined && <span className="text-ink-2"> ± {fixed(info.mae, 3)}</span>}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function SingleResult({
   glass,
   oxides,
@@ -207,7 +249,7 @@ function SingleResult({
             <span className="text-lg text-ink-2">°C</span>
           </div>
           <p className="mt-1 text-sm text-ink-2">
-            <span className="num">{deg(tg[0].value)} K</span> · {MODEL_BY_ID[tg[0].model]?.name ?? tg[0].model} · ± is
+            <span className="num">{deg(tg[0].value)} K</span> · {modelInfo(tg[0].model)?.name ?? tg[0].model} · ± is
             its typical error
           </p>
         </div>
