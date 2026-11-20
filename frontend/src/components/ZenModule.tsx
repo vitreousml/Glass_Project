@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { AlertCircle, AlertTriangle, ArrowRight } from "lucide-react";
 import { discoverCompositions, getBankSummary } from "@/lib/api";
-import { MODELS, OXIDES, formula, rangeRegion, type Composition } from "@/lib/chem";
+import { MODELS, formula, rangeRegion, type Composition } from "@/lib/chem";
 import { SPRING, T, staggerStep } from "@/lib/motion";
 import { cToK, fixed, kToC } from "@/lib/units";
 import { useAuth } from "@/context/AuthContext";
@@ -36,10 +36,13 @@ type State =
 
 type Ranges = Record<string, { min: number; max: number }>;
 
-// #, three oxides, Tg, Δ
-const ROW = "grid grid-cols-[1.25rem_repeat(3,minmax(0,1fr))_minmax(0,1.2fr)_2.5rem] items-center gap-2";
+/** Build a CSS grid class for 1 index col + N oxide cols + Tg col + Δ col */
+function rowClass(n: number) {
+  return `grid grid-cols-[1.25rem_repeat(${n},minmax(0,1fr))_minmax(0,1.2fr)_2.5rem] items-center gap-2`;
+}
 
-const idOf = (c: Candidate) => OXIDES.map((ox) => c.composition[ox]).join("-");
+const idOf = (c: Candidate, oxList: string[]) =>
+  oxList.map((ox) => c.composition[ox]).join("-");
 
 export default function ZenModule() {
   const { token } = useAuth();
@@ -49,11 +52,21 @@ export default function ZenModule() {
   const [state, setState] = useState<State>({ kind: "idle" });
   const [hover, setHover] = useState<string | null>(null);
   const [ranges, setRanges] = useState<Ranges | null>(null);
+  // Oxides come from the bank/summary `features` field — no hardcoding
+  const [oxides, setOxides] = useState<string[]>([]);
 
   useEffect(() => {
     getBankSummary()
-      .then((s) => setRanges(s.ranges ?? null))
-      .catch(() => setRanges(null));
+      .then((s) => {
+        setRanges(s.ranges ?? null);
+        // features array comes from the model bundle via the backend
+        if (Array.isArray(s.features) && s.features.length > 0) {
+          setOxides(s.features as string[]);
+        }
+      })
+      .catch(() => {
+        setRanges(null);
+      });
   }, []);
 
   const region = useMemo(() => (ranges ? rangeRegion(ranges) : []), [ranges]);
@@ -72,6 +85,10 @@ export default function ZenModule() {
     try {
       // The API works in Kelvin; a tolerance of ±20 is the same in K and °C.
       const data = await discoverCompositions(cToK(targetC), tolerance, model, token);
+      // If the backend returns a features array, keep oxides in sync
+      if (Array.isArray(data.features) && data.features.length > 0) {
+        setOxides(data.features as string[]);
+      }
       setState({ kind: "done", query, candidates: data.candidates ?? [], total: data.candidates_count ?? 0 });
     } catch (err) {
       setState({ kind: "error", message: err instanceof Error ? err.message : "Couldn't reach the server." });
@@ -79,8 +96,15 @@ export default function ZenModule() {
   };
 
   const candidates = state.kind === "done" ? state.candidates : [];
-  const points = candidates.map((c) => ({ id: idOf(c), comp: c.composition }));
-  const closest = candidates[0] ? idOf(candidates[0]) : null;
+  const points = candidates.map((c) => ({ id: idOf(c, oxides), comp: c.composition }));
+  const closest = candidates[0] ? idOf(candidates[0], oxides) : null;
+
+  // Safe 3-tuple for TernaryDiagram (which requires exactly 3 vertices)
+  const ternaryOxides =
+    oxides.length === 3 ? (oxides as [string, string, string]) : undefined;
+
+  // Dynamic grid class based on number of oxides
+  const ROW = rowClass(oxides.length || 3);
 
   return (
     <div className="mx-auto max-w-6xl space-y-5">
@@ -205,7 +229,7 @@ export default function ZenModule() {
               onHover={setHover}
               scanning={loading}
               className="mx-auto w-full max-w-xs md:max-w-none"
-              title="Candidate compositions on the SiO₂–B₂O₃–Na₂O triangle"
+              oxides={ternaryOxides}
             />
             <p className="mt-2 text-xs text-ink-3">
               Shaded: training coverage. {candidates.length > 0 && "Orange: the closest match, or the one you point at."}
@@ -241,7 +265,7 @@ export default function ZenModule() {
               {state.kind === "loading" && (
                 <Fade key="loading">
                   <p className="mt-1 text-sm text-ink-2">
-                    Screening SiO<sub>2</sub> from 40 to 85 mol % in 2.5 % steps…
+                    Screening oxide composition space in 2.5 mol % steps…
                   </p>
                   <div className="mt-3 space-y-2" role="status" aria-label="Searching">
                     {Array.from({ length: 5 }).map((_, i) => (
@@ -298,9 +322,10 @@ export default function ZenModule() {
                   <div
                     className={`mt-3 transition-[filter,opacity] duration-200 ${stale ? "opacity-55 grayscale" : ""}`}
                   >
+                    {/* Header row */}
                     <div className={`${ROW} overflow-y-hidden px-3 pb-1 text-xs text-ink-3 [scrollbar-gutter:stable]`} aria-hidden>
                       <span>#</span>
-                      {OXIDES.map((ox) => (
+                      {oxides.map((ox) => (
                         <span key={ox} className="text-right">
                           {formula(ox)}
                         </span>
@@ -312,14 +337,14 @@ export default function ZenModule() {
                     </div>
                     <ol className="max-h-[22rem] space-y-0.5 overflow-y-auto [scrollbar-gutter:stable]">
                       {candidates.map((c, i) => {
-                        const id = idOf(c);
+                        const id = idOf(c, oxides);
                         const on = (hover ?? closest) === id;
                         return (
                           <motion.li
                             key={id}
                             onMouseEnter={() => setHover(id)}
                             onMouseLeave={() => setHover(null)}
-                            aria-label={`${OXIDES.map((ox) => `${ox} ${fixed(c.composition[ox])}`).join(", ")} mol %: ${fixed(kToC(c.predicted_tg))} °C`}
+                            aria-label={`${oxides.map((ox) => `${ox} ${fixed(c.composition[ox])}`).join(", ")} mol %: ${fixed(kToC(c.predicted_tg))} °C`}
                             initial={{ opacity: 0, y: 6 }}
                             animate={{ opacity: 1, y: 0, transition: { ...T.small, delay: i * staggerStep(candidates.length) } }}
                             className={`${ROW} num rounded-md border px-3 py-1.5 text-sm transition-colors duration-200 ${
@@ -327,7 +352,7 @@ export default function ZenModule() {
                             }`}
                           >
                             <span className="text-xs text-ink-3">{i + 1}</span>
-                            {OXIDES.map((ox) => (
+                            {oxides.map((ox) => (
                               <span key={ox} className="text-right">
                                 {fixed(c.composition[ox])}
                               </span>

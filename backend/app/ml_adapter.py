@@ -133,6 +133,23 @@ def predict_all_models(composition: Dict[str, float]) -> List[Dict[str, Any]]:
         results.append(predict_single_model(composition, m))
     return results
 
+def get_zen_grid_config(model_name: str = "RF", step: float = 2.5) -> Dict[str, Any]:
+    """
+    Returns oxide features and training bounds for Zen grid search,
+    derived entirely from the model bundle — nothing hardcoded.
+    When an admin updates the ML bundle, Zen automatically picks it up.
+    """
+    bundle = predict_tg.load_model(model_name)
+    features: List[str] = bundle["features"]          # e.g. ["SiO2","B2O3","Na2O"]
+    feature_min: Dict[str, float] = bundle["feature_min"]
+    feature_max: Dict[str, float] = bundle["feature_max"]
+    bounds: Dict[str, Dict[str, float]] = {}
+    for feat in features:
+        lo = max(0.0, float(feature_min.get(feat, 0.0)))
+        hi = min(100.0, float(feature_max.get(feat, 100.0)))
+        bounds[feat] = {"min": round(lo, 2), "max": round(hi, 2)}
+    return {"features": features, "bounds": bounds, "step": step}
+
 def wt_to_mol_percent(composition: Dict[str, float]) -> Dict[str, float]:
     """
     Convert an oxide composition from weight % to mol %.

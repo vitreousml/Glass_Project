@@ -7,42 +7,46 @@ import { DURATION, EASE_OUT, SPRING } from "@/lib/motion";
 
 /*
  * A three-oxide glass is a point in a triangle.
- * SiO2 at the top, B2O3 bottom-left, Na2O bottom-right. Gridlines every 20 mol %.
+ * Vertex 0 at the top, Vertex 1 bottom-left, Vertex 2 bottom-right.
+ * Gridlines every 20 mol %.
+ * Accepts an optional `oxides` prop ([top, bottom-left, bottom-right]);
+ * falls back to the OXIDES constant so existing callers keep working.
  */
-const V = {
-  SiO2: { x: 60, y: 12 },
-  B2O3: { x: 10, y: 98.6 },
-  Na2O: { x: 110, y: 98.6 },
-};
 
-export function toXY(c: Composition) {
-  const total = OXIDES.reduce((a, ox) => a + (c[ox] ?? 0), 0) || 1;
-  let x = 0;
-  let y = 0;
-  OXIDES.forEach((ox) => {
-    const w = (c[ox] ?? 0) / total;
-    x += w * V[ox].x;
-    y += w * V[ox].y;
-  });
-  return { x, y };
+// Fixed SVG vertex positions (never change — purely geometric)
+const V0 = { x: 60, y: 12 };     // top
+const V1 = { x: 10, y: 98.6 };   // bottom-left
+const V2 = { x: 110, y: 98.6 };  // bottom-right
+
+/** Convert a composition to SVG (x,y) using whichever 3 oxides are active. */
+export function toXY(c: Composition, oxides: readonly string[] = OXIDES) {
+  const total = oxides.reduce((a, ox) => a + (c[ox] ?? 0), 0) || 1;
+  const [ox0, ox1, ox2] = oxides;
+  const w0 = (c[ox0] ?? 0) / total;
+  const w1 = (c[ox1] ?? 0) / total;
+  const w2 = (c[ox2] ?? 0) / total;
+  return {
+    x: w0 * V0.x + w1 * V1.x + w2 * V2.x,
+    y: w0 * V0.y + w1 * V1.y + w2 * V2.y,
+  };
 }
 
-function gridLines() {
+function gridLines(oxides: readonly string[]) {
   const lines: { x1: number; y1: number; x2: number; y2: number }[] = [];
+  const [a, b, c] = oxides;
   for (const k of [20, 40, 60, 80]) {
-    for (const [a, b, c] of [
-      ["SiO2", "B2O3", "Na2O"],
-      ["B2O3", "Na2O", "SiO2"],
-      ["Na2O", "SiO2", "B2O3"],
-    ] as const) {
-      const p1 = toXY({ [a]: k, [b]: 100 - k, [c]: 0 });
-      const p2 = toXY({ [a]: k, [b]: 0, [c]: 100 - k });
+    for (const [p, q, r] of [
+      [a, b, c],
+      [b, c, a],
+      [c, a, b],
+    ]) {
+      const p1 = toXY({ [p]: k, [q]: 100 - k, [r]: 0 }, oxides);
+      const p2 = toXY({ [p]: k, [q]: 0, [r]: 100 - k }, oxides);
       lines.push({ x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y });
     }
   }
   return lines;
 }
-const GRID = gridLines();
 
 export interface TernaryPoint {
   id: string;
@@ -58,7 +62,8 @@ export function TernaryDiagram({
   onHover,
   scanning = false,
   className = "",
-  title = "Composition on the SiO₂–B₂O₃–Na₂O triangle",
+  title,
+  oxides: oxidesProp,
 }: {
   /** One composition, drawn as a dot that glides when it changes. */
   point?: Composition | null;
@@ -69,30 +74,51 @@ export function TernaryDiagram({
   points?: TernaryPoint[];
   highlightId?: string | null;
   onHover?: (id: string | null) => void;
-  /** Sweep a line across the SiO₂ levels being screened (a search is running). */
+  /** Sweep a line across the composition space while a search is running. */
   scanning?: boolean;
   className?: string;
+  /** SVG accessible title. Defaults to a label built from `oxides`. */
   title?: string;
+  /**
+   * Which 3 oxides map to [top, bottom-left, bottom-right] vertices.
+   * Falls back to the OXIDES constant from chem.ts so existing callers
+   * don't need to change.
+   */
+  oxides?: [string, string, string];
 }) {
   const reduce = useReducedMotion();
   const clipId = "tri" + useId().replace(/[^a-zA-Z0-9_-]/g, "");
 
+  // Resolve active oxides: prop → OXIDES constant fallback
+  const activeOxides: readonly string[] =
+    oxidesProp && oxidesProp.length === 3 ? oxidesProp : OXIDES;
+
+  const svgTitle =
+    title ?? `Composition on the ${activeOxides.map(formula).join("–")} triangle`;
+
+  // Recompute grid whenever the oxide set changes
+  const GRID = useMemo(() => gridLines(activeOxides), [activeOxides]);
+
   const regionPath = useMemo(() => {
     if (!region || region.length < 3) return null;
-    const xy = region.map(toXY);
+    const xy = region.map((c) => toXY(c, activeOxides));
     const cx = xy.reduce((a, p) => a + p.x, 0) / xy.length;
     const cy = xy.reduce((a, p) => a + p.y, 0) / xy.length;
     xy.sort((p, q) => Math.atan2(p.y - cy, p.x - cx) - Math.atan2(q.y - cy, q.x - cx));
     return "M" + xy.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(" L") + " Z";
-  }, [region]);
+  }, [region, activeOxides]);
 
-  const dot = point ? toXY(point) : null;
+  const dot = point ? toXY(point, activeOxides) : null;
+
+  // Scanning sweep: animates from first vertex toward the base
+  const sweepStart = toXY({ [activeOxides[0]]: 85, [activeOxides[1]]: 15, [activeOxides[2]]: 0 }, activeOxides);
+  const sweepEnd  = toXY({ [activeOxides[0]]: 40, [activeOxides[1]]: 60, [activeOxides[2]]: 0 }, activeOxides);
 
   return (
-    <svg viewBox="0 0 120 112" className={className} role="img" aria-label={title}>
+    <svg viewBox="0 0 120 112" className={className} role="img" aria-label={svgTitle}>
       {/* Frame and grid */}
       <path
-        d={`M${V.SiO2.x},${V.SiO2.y} L${V.B2O3.x},${V.B2O3.y} L${V.Na2O.x},${V.Na2O.y} Z`}
+        d={`M${V0.x},${V0.y} L${V1.x},${V1.y} L${V2.x},${V2.y} Z`}
         fill="none"
         stroke="var(--line-strong)"
         strokeWidth={0.8}
@@ -103,16 +129,16 @@ export function TernaryDiagram({
         ))}
       </g>
 
-      {/* Search sweep: the server screens SiO₂ from 40 to 85 mol %, low to high */}
+      {/* Search sweep animation */}
       {scanning && !reduce && (
         <>
           <clipPath id={clipId}>
-            <path d={`M${V.SiO2.x},${V.SiO2.y} L${V.B2O3.x},${V.B2O3.y} L${V.Na2O.x},${V.Na2O.y} Z`} />
+            <path d={`M${V0.x},${V0.y} L${V1.x},${V1.y} L${V2.x},${V2.y} Z`} />
           </clipPath>
           <g clipPath={`url(#${clipId})`}>
             <motion.g
-              initial={{ y: toXY({ SiO2: 40, B2O3: 60 }).y }}
-              animate={{ y: toXY({ SiO2: 85, B2O3: 15 }).y }}
+              initial={{ y: sweepStart.y }}
+              animate={{ y: sweepEnd.y }}
               transition={{ duration: 1.1, ease: "linear", repeat: Infinity, repeatDelay: 0.15 }}
             >
               <rect x={0} y={0} width={120} height={6} style={{ fill: "var(--heat-3)" }} opacity={0.18} />
@@ -146,7 +172,7 @@ export function TernaryDiagram({
 
       {/* Many points */}
       {points?.map((p, i) => {
-        const { x, y } = toXY(p.comp);
+        const { x, y } = toXY(p.comp, activeOxides);
         const on = highlightId === p.id;
         return (
           <motion.circle
@@ -173,16 +199,16 @@ export function TernaryDiagram({
         </motion.g>
       )}
 
-      {/* Vertex labels */}
+      {/* Vertex labels — derived from active oxides, never hardcoded */}
       <g fontSize={7} style={{ fill: "var(--ink-2)" }} fontWeight={500}>
-        <text x={V.SiO2.x} y={V.SiO2.y - 4} textAnchor="middle">
-          {formula("SiO2")}
+        <text x={V0.x} y={V0.y - 4} textAnchor="middle">
+          {formula(activeOxides[0])}
         </text>
-        <text x={V.B2O3.x} y={V.B2O3.y + 9} textAnchor="start">
-          {formula("B2O3")}
+        <text x={V1.x} y={V1.y + 9} textAnchor="start">
+          {formula(activeOxides[1])}
         </text>
-        <text x={V.Na2O.x} y={V.Na2O.y + 9} textAnchor="end">
-          {formula("Na2O")}
+        <text x={V2.x} y={V2.y + 9} textAnchor="end">
+          {formula(activeOxides[2])}
         </text>
       </g>
     </svg>

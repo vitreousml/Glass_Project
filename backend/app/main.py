@@ -139,20 +139,27 @@ def get_models_info():
 def get_bank_summary():
     """
     Bank exploration overview: returns safe statistical boundaries without revealing raw private data rows.
+    Oxide ranges are derived from the ML model bundle — no hardcoding.
     """
+    config = ml_adapter.get_zen_grid_config()
+    bounds = config["bounds"]
+    features = config["features"]
+    ranges: dict = {
+        feat: {"min": v["min"], "max": v["max"], "unit": "mol %"}
+        for feat, v in bounds.items()
+    }
+    # Tg range from actual dataset stats (dataset metadata, not model metadata)
+    ranges["Tg"] = {"min": 496.15, "max": 998.15, "unit": "K"}
+    system_label = " – ".join(reversed(features)) + " glass system"
     return {
-        "system": "Na2O - B2O3 - SiO2 ternary glass system",
+        "system": system_label,
         "sample_count": 480,
         "target_property": "Tg (Glass Transition Temperature)",
         "unit": "Kelvin (K)",
         "composition_basis": "mol %",
-        "ranges": {
-            "SiO2": {"min": 40.0, "max": 85.0, "unit": "mol %"},
-            "B2O3": {"min": 0.0, "max": 40.0, "unit": "mol %"},
-            "Na2O": {"min": 0.0, "max": 45.0, "unit": "mol %"},
-            "Tg": {"min": 496.15, "max": 998.15, "unit": "K"}
-        },
-        "models_available": ml_adapter.MODELS
+        "ranges": ranges,
+        "models_available": ml_adapter.MODELS,
+        "features": features,
     }
 
 @app.post("/api/v1/bank/query")
@@ -466,39 +473,48 @@ def discover_compositions(
 ):
     """
     Zen inverse design: given target Tg in Kelvin, screens composition space and returns candidates.
+    Uses model bundle to derive features and bounds — nothing hardcoded.
     Requires authenticated user (Firebase ID Token).
-    Runs grid search locally on the server without exposing private raw dataset.
     """
-    candidates = []
-    step = 2.5
-    sio2_vals = [x * step for x in range(16, 35)]  # 40 to ~85 mol %
-    
-    for s in sio2_vals:
-        rem = 100.0 - s
-        if rem <= 0:
-            continue
-        b_vals = [y * step for y in range(0, int(rem / step) + 1)]
-        for b in b_vals:
-            na = 100.0 - (s + b)
-            if na < 0:
-                continue
-            comp = {"SiO2": s, "B2O3": b, "Na2O": na}
-            res = ml_adapter.predict_single_model(comp, data.model_name)
-            pred_tg = res["value"]
-            diff = abs(pred_tg - data.target_tg)
-            if diff <= data.tolerance:
-                candidates.append({
-                    "composition": comp,
-                    "predicted_tg": round(pred_tg, 1),
-                    "difference": round(diff, 1),
-                    "warnings": res.get("warnings", []),
-                    "unit": "K"
-                })
+    config = ml_adapter.get_zen_grid_config(data.model_name)
+    features: list = config["features"]
+    bounds: dict = config["bounds"]
+    step: float = config["step"]
+    candidates: list = []
+
+    def recurse(idx: int, rem: float, partial: dict) -> None:
+        if len(candidates) >= 50:
+            return
+        if idx == len(features) - 1:
+            feat = features[-1]
+            lo = bounds[feat]["min"]
+            hi = bounds[feat]["max"]
+            val = round(rem, 4)
+            if lo - 1e-5 <= val <= hi + 1e-5:
+                comp = {**partial, feat: val}
+                res = ml_adapter.predict_single_model(comp, data.model_name)
+                pred_tg = res["value"]
+                diff = abs(pred_tg - data.target_tg)
+                if diff <= data.tolerance:
+                    candidates.append({
+                        "composition": comp,
+                        "predicted_tg": round(pred_tg, 1),
+                        "difference": round(diff, 1),
+                        "warnings": res.get("warnings", []),
+                        "unit": "K"
+                    })
+            return
+        feat = features[idx]
+        lo = bounds[feat]["min"]
+        hi_v = min(bounds[feat]["max"], rem)
+        v = lo
+        while v <= hi_v + 1e-5:
             if len(candidates) >= 50:
                 break
-        if len(candidates) >= 50:
-            break
-            
+            recurse(idx + 1, rem - v, {**partial, feat: round(v, 4)})
+            v += step
+
+    recurse(0, 100.0, {})
     candidates.sort(key=lambda x: x["difference"])
     return {
         "target_tg": data.target_tg,
@@ -506,5 +522,6 @@ def discover_compositions(
         "tolerance": data.tolerance,
         "candidates_count": len(candidates),
         "candidates": candidates[:20],
+        "features": features,
         "authenticated_user": user.get("email")
     }
